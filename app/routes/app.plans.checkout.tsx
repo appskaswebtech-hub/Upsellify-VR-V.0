@@ -1,5 +1,6 @@
 import { type LoaderFunctionArgs, redirect } from "@remix-run/node";
 import { authenticate, BASIC_PLAN, ADVANCED_PLAN } from "../shopify.server";
+import { useTranslation } from "../i18n/LanguageContext";
 
 const PLAN_MAP = {
   basic: BASIC_PLAN,
@@ -35,5 +36,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function Checkout() {
-  return <div>Loading...</div>;
+  const { t } = useTranslation();
+  return <div>{t.common.loading}</div>;
 }

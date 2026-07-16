@@ -1,0 +1,22 @@
+{
+  "ratings": {
+    "stars": {
+      "label": "Valutazioni"
+    },
+    "home": {
+      "recommendationText": "Prodotto consigliato!"
+    }
+  },
+  "widget": {
+    "note": "Gli articoli selezionati verranno aggiunti al carrello.",
+    "total": "Totale",
+    "adding": "Aggiunta in corso...",
+    "select_at_least_one": "Seleziona almeno un articolo.",
+    "sold_out_option_suffix": " — Esaurito",
+    "sold_out_items": "%%items%% esaurito/i.",
+    "could_not_add": "Impossibile aggiungere il bundle.",
+    "bundle_fallback": "Bundle",
+    "bundle_property_label": "Bundle",
+    "tier_buy_get": "Acquista %%min_items%%, ricevi %%value%%"
+  }
+}

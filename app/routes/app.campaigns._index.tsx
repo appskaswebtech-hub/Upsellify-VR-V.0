@@ -1,5 +1,6 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useNavigate } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { useLoaderData, useNavigate, useFetcher } from "@remix-run/react";
+import { useState } from "react";
 
 import {
   Page,
@@ -11,12 +12,17 @@ import {
   Box,
   InlineStack,
   Banner,
+  Button,
+  Modal,
+  Icon,
 } from "@shopify/polaris";
+import { DeleteIcon, CollectionIcon } from "@shopify/polaris-icons";
 
 import { TitleBar } from "@shopify/app-bridge-react";
 
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { useTranslation } from "../i18n/LanguageContext";
 
 // =========================
 // CAMPAIGN LIMITS
@@ -29,6 +35,43 @@ const CAMPAIGN_LIMITS: Record<string, number> = {
   free: 1,
   basic: 5,
   advanced: Infinity,
+};
+
+// =========================
+// ACTION
+// =========================
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session, admin } = await authenticate.admin(request);
+  const form = await request.formData();
+  const intent = form.get("intent");
+  const campaignId = String(form.get("campaignId") || "");
+
+  if (intent === "delete" && campaignId) {
+    const campaign = await db.campaign.findFirst({
+      where: { id: campaignId, shop: session.shop, deletedAt: null },
+    });
+    if (campaign) {
+      await db.campaign.update({
+        where: { id: campaign.id },
+        data: { deletedAt: new Date() },
+      });
+      try {
+        const { syncShopifyDiscount } = await import("../services/discount-sync.server");
+        await syncShopifyDiscount({ admin, shop: session.shop });
+      } catch (e) {
+        console.error("Discount sync failed on delete:", e);
+      }
+      try {
+        const { syncPostPurchaseMetafields } = await import("../services/post-purchase-sync.server");
+        await syncPostPurchaseMetafields({ admin, shop: session.shop });
+      } catch (e) {
+        console.error("PP metafield sync failed on delete:", e);
+      }
+    }
+  }
+
+  return { ok: true };
 };
 
 // =========================
@@ -91,6 +134,18 @@ export default function Campaigns() {
   const { campaigns, plan } = useLoaderData<typeof loader>();
 
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const deleteFetcher = useFetcher();
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    deleteFetcher.submit(
+      { intent: "delete", campaignId: deleteTarget.id },
+      { method: "post" },
+    );
+    setDeleteTarget(null);
+  };
 
   // =========================
   // LIMITS
@@ -103,7 +158,7 @@ export default function Campaigns() {
 
   const canCreate = totalCampaigns < limit;
 
-  const limitLabel = limit === Infinity ? "Unlimited" : limit;
+  const limitLabel = limit === Infinity ? t.campaignsIndex.planUsage.unlimited : limit;
 
   // =========================
   // EMPTY STATE
@@ -112,39 +167,23 @@ export default function Campaigns() {
   if (campaigns.length === 0) {
     return (
       <Page>
-        <TitleBar title="Campaigns" />
+        <TitleBar title={t.campaignsIndex.title} />
 
         <Box paddingBlockEnd="400">
-          <Card>
-            <InlineStack align="space-between">
-              <Text as="p" variant="bodyMd">
-                Current Plan:{" "}
-                <strong style={{ textTransform: "capitalize" }}>
-                  {plan}
-                </strong>
-              </Text>
-
-              <Text as="p" variant="bodyMd">
-                Campaign Usage:{" "}
-                <strong>
-                  {totalCampaigns} / {limitLabel}
-                </strong>
-              </Text>
-            </InlineStack>
-          </Card>
+          <PlanUsageCard plan={plan} totalCampaigns={totalCampaigns} limitLabel={limitLabel} limit={limit} />
         </Box>
 
         <Card>
           <EmptyState
-            heading="Create your first campaign"
+            heading={t.campaignsIndex.emptyState.heading}
             action={{
-              content: "Create campaign",
+              content: t.campaignsIndex.emptyState.cta,
               onAction: () => navigate("/app/campaigns/new"),
             }}
             image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
           >
             <p>
-              Bundle products together and boost average order value.
+              {t.campaignsIndex.emptyState.body}
             </p>
           </EmptyState>
         </Card>
@@ -158,9 +197,9 @@ export default function Campaigns() {
 
   return (
     <Page
-      title="Campaigns"
+      title={t.campaignsIndex.title}
       primaryAction={{
-        content: canCreate ? "Create campaign" : "Upgrade plan",
+        content: canCreate ? t.campaignsIndex.createCampaign : t.campaignsIndex.upgradePlanAction,
         disabled: false,
         onAction: () => {
           if (canCreate) {
@@ -171,30 +210,14 @@ export default function Campaigns() {
         },
       }}
     >
-      <TitleBar title="Campaigns" />
+      <TitleBar title={t.campaignsIndex.title} />
 
       {/* ========================= */}
       {/* PLAN STATUS */}
       {/* ========================= */}
 
       <Box paddingBlockEnd="400">
-        <Card>
-          <InlineStack align="space-between">
-            <Text as="p" variant="bodyMd">
-              Current Plan:{" "}
-              <strong style={{ textTransform: "capitalize" }}>
-                {plan}
-              </strong>
-            </Text>
-
-            <Text as="p" variant="bodyMd">
-              Campaign Usage:{" "}
-              <strong>
-                {totalCampaigns} / {limitLabel}
-              </strong>
-            </Text>
-          </InlineStack>
-        </Card>
+        <PlanUsageCard plan={plan} totalCampaigns={totalCampaigns} limitLabel={limitLabel} limit={limit} />
       </Box>
 
       {/* ========================= */}
@@ -207,24 +230,21 @@ export default function Campaigns() {
             tone="warning"
             title={
               plan === "free"
-                ? "You've used your free campaign"
-                : "Campaign limit reached"
+                ? t.campaignsIndex.limitBanner.freeTitle
+                : t.campaignsIndex.limitBanner.genericTitle
             }
             action={{
               content:
                 plan === "advanced"
-                  ? "Contact support"
-                  : "Upgrade plan",
+                  ? t.campaignsIndex.limitBanner.contactSupport
+                  : t.campaignsIndex.limitBanner.upgradePlan,
               onAction: () => navigate("/app/billing"),
             }}
           >
             <p>
-              {plan === "free" &&
-                "The Free plan includes 1 campaign. Upgrade to Basic for 5 campaigns or Advanced for unlimited."}
-              {plan === "basic" &&
-                "The Basic plan includes 5 campaigns. Upgrade to Advanced for unlimited campaigns."}
-              {plan === "advanced" &&
-                "You've reached an unexpected limit on the Advanced plan."}
+              {plan === "free" && t.campaignsIndex.limitBanner.freeBody}
+              {plan === "basic" && t.campaignsIndex.limitBanner.basicBody}
+              {plan === "advanced" && t.campaignsIndex.limitBanner.advancedBody}
             </p>
           </Banner>
         </Box>
@@ -239,12 +259,13 @@ export default function Campaigns() {
           itemCount={campaigns.length}
           selectable={false}
           headings={[
-            { title: "Name" },
-            { title: "Type" },
-            { title: "Status" },
-            { title: "Discount" },
-            { title: "Triggers" },
-            { title: "Offers" },
+            { title: t.campaignsIndex.table.name },
+            { title: t.campaignsIndex.table.type },
+            { title: t.campaignsIndex.table.status },
+            { title: t.campaignsIndex.table.discount },
+            { title: t.campaignsIndex.table.triggers },
+            { title: t.campaignsIndex.table.offers },
+            { title: t.campaignsIndex.table.actions },
           ]}
         >
           {campaigns.map((c, i) => (
@@ -265,25 +286,35 @@ export default function Campaigns() {
               </IndexTable.Cell>
 
               <IndexTable.Cell>
-                <Text as="span" tone="subdued">
-                  {prettyType(c.type)}
-                </Text>
+                <InlineStack gap="150" blockAlign="center">
+                  <span style={{
+                    display: "inline-block",
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    background: typeColor(c.type),
+                    flexShrink: 0,
+                  }} />
+                  <Text as="span" tone="subdued">
+                    {prettyType(c.type)}
+                  </Text>
+                </InlineStack>
               </IndexTable.Cell>
 
               <IndexTable.Cell>
                 <Badge tone={statusTone(c.status)}>
-                  {c.status}
+                  {t.campaignsIndex.statusLabels[c.status] ?? c.status}
                 </Badge>
               </IndexTable.Cell>
 
               <IndexTable.Cell>
                 {c.discount && c.discount.type !== "NONE" ? (
                   <Badge tone="attention">
-                    {prettyDiscount(c.discount)}
+                    {prettyDiscount(c.discount, t)}
                   </Badge>
                 ) : (
                   <Text as="span" tone="subdued">
-                    —
+                    {t.campaignsIndex.discount.none}
                   </Text>
                 )}
               </IndexTable.Cell>
@@ -299,10 +330,42 @@ export default function Campaigns() {
                   {c._count.offers}
                 </Text>
               </IndexTable.Cell>
+
+              <IndexTable.Cell>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    icon={DeleteIcon}
+                    variant="tertiary"
+                    tone="critical"
+                    accessibilityLabel={t.campaignsIndex.deleteCampaignAction}
+                    onClick={() => setDeleteTarget({ id: c.id, name: c.name })}
+                  />
+                </div>
+              </IndexTable.Cell>
             </IndexTable.Row>
           ))}
         </IndexTable>
       </Card>
+
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title={t.campaignsIndex.deleteModal.title}
+        primaryAction={{
+          content: t.campaignsIndex.deleteModal.confirm,
+          destructive: true,
+          onAction: confirmDelete,
+        }}
+        secondaryActions={[
+          { content: t.campaignsIndex.deleteModal.cancel, onAction: () => setDeleteTarget(null) },
+        ]}
+      >
+        <Modal.Section>
+          <Text as="p">
+            {t.campaignsIndex.deleteModal.body(deleteTarget?.name ?? "")}
+          </Text>
+        </Modal.Section>
+      </Modal>
     </Page>
   );
 }
@@ -311,10 +374,73 @@ export default function Campaigns() {
 // HELPERS
 // =========================
 
+function PlanUsageCard({
+  plan, totalCampaigns, limitLabel, limit,
+}: {
+  plan: string;
+  totalCampaigns: number;
+  limitLabel: string | number;
+  limit: number;
+}) {
+  const { t } = useTranslation();
+  const usagePct = limit === Infinity ? 100 : Math.min(100, Math.round((totalCampaigns / Math.max(limit, 1)) * 100));
+  return (
+    <Card>
+      <InlineStack align="space-between" blockAlign="center" gap="400">
+        <InlineStack gap="300" blockAlign="center">
+          <div style={{
+            width: "36px",
+            height: "36px",
+            borderRadius: "10px",
+            background: "linear-gradient(135deg, #4F46E5, #7C6CF0)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            color: "#fff",
+          }}>
+            <Icon source={CollectionIcon} tone="inherit" />
+          </div>
+          <Text as="p" variant="bodyMd">
+            {t.campaignsIndex.planUsage.currentPlan}{" "}
+            <strong style={{ textTransform: "capitalize" }}>{plan}</strong>
+          </Text>
+        </InlineStack>
+
+        <div style={{ minWidth: "180px" }}>
+          <InlineStack align="space-between">
+            <Text as="span" variant="bodySm" tone="subdued">{t.campaignsIndex.planUsage.usage}</Text>
+            <Text as="span" variant="bodySm" fontWeight="semibold">
+              {totalCampaigns} / {limitLabel}
+            </Text>
+          </InlineStack>
+          <div style={{ height: "6px", background: "#EEF0FF", borderRadius: "999px", overflow: "hidden", marginTop: "4px" }}>
+            <div style={{
+              height: "100%",
+              width: `${usagePct}%`,
+              background: "linear-gradient(90deg, #4F46E5, #7C6CF0)",
+              borderRadius: "999px",
+            }} />
+          </div>
+        </div>
+      </InlineStack>
+    </Card>
+  );
+}
+
 function prettyType(t: string) {
   return t
     .replace("FBT_", "FBT · ")
     .replace(/_/g, " ");
+}
+
+function typeColor(t: string): string {
+  if (t.startsWith("FBT_")) return "#4F46E5";
+  if (t.startsWith("ADDON_")) return "#0D9488";
+  if (t.startsWith("SHOP_COLLECTION")) return "#D97706";
+  if (t.startsWith("CART_")) return "#DB2777";
+  if (t.startsWith("POST_PURCHASE") || t === "THANK_YOU_PAGE_UPSELL") return "#7C3AED";
+  return "#71717A";
 }
 
 function statusTone(
@@ -343,18 +469,19 @@ function prettyDiscount(
     type: string;
     value: number | null;
   },
+  t: import("../i18n").Dictionary,
 ) {
   if (d.type === "PERCENTAGE") {
-    return `${d.value}% off`;
+    return t.campaignsIndex.discount.percentOff(d.value ?? 0);
   }
 
   if (d.type === "FIXED") {
-    return `$${d.value} off`;
+    return t.campaignsIndex.discount.fixedOff(d.value ?? 0);
   }
 
   if (d.type === "TIERED") {
-    return "Tiered";
+    return t.campaignsIndex.discount.tiered;
   }
 
-  return "—";
+  return t.campaignsIndex.discount.none;
 }

@@ -4,8 +4,9 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  try {
   const { session, admin } = await authenticate.public.appProxy(request);
-  if (!session) return json({ campaigns: [] }, { status: 401 });
+  if (!session) return json({ campaigns: [] });
 
   const url = new URL(request.url);
   const productId = url.searchParams.get("productId");
@@ -20,7 +21,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     where: {
       shop: session.shop,
       status: "ACTIVE",
-      placement: "PRODUCT_PAGE",
+      placement: url.searchParams.get("placement") || "PRODUCT_PAGE",
       deletedAt: null,
       AND: [
         { OR: [{ startDate: null }, { startDate: { lte: now } }] },
@@ -41,31 +42,59 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
 
   // Filter collection-based campaigns by resolved membership
-  const filtered = [];
+  const filtered: typeof candidates = [];
+  const matchedCollectionIds = new Map<string, string>(); // campaignId -> collectionId
   for (const c of candidates) {
     if (c.triggerType !== "SPECIFIC_COLLECTIONS") {
       filtered.push(c);
       continue;
     }
+    if (!admin) continue;
     const colIds = c.triggers
       .filter((t) => t.resourceType === "collection")
       .map((t) => t.resourceId);
-    if (await productInAnyCollection(admin, session.shop, gid, colIds)) {
-      filtered.push(c);
+    try {
+      const matchedId = await matchedCollectionId(admin, session.shop, gid, colIds);
+      if (matchedId) {
+        matchedCollectionIds.set(c.id, matchedId);
+        filtered.push(c);
+      }
+    } catch {
+      // skip this campaign if collection lookup fails
     }
   }
 
   if (filtered.length === 0) return json({ campaigns: [] });
 
   const winner = filtered[0];
+  const isShopCollection = SHOP_COLLECTION_TYPES.has(winner.type);
 
-  let offers = [...winner.offers];
-  if (winner.randomizeOffers) offers.sort(() => Math.random() - 0.5);
-  if (winner.limitOffersShown) offers = offers.slice(0, winner.limitOffersShown);
+  let offers: { productId: string; productTitle: string; productHandle: string | null; imageUrl: string | null }[];
+  if (isShopCollection && winner.offers.length === 0) {
+    // No offers manually picked — auto-pull from the matched collection instead.
+    const colId = matchedCollectionIds.get(winner.id);
+    if (!admin || !colId) {
+      offers = [];
+    } else {
+      const limit = winner.limitOffersShown || 8;
+      const products = await fetchCollectionProductDetails(admin, colId, gid, limit);
+      offers = products.map((p) => ({
+        productId: p.id,
+        productTitle: p.title,
+        productHandle: p.handle,
+        imageUrl: p.image,
+      }));
+      if (winner.randomizeOffers) offers.sort(() => Math.random() - 0.5);
+    }
+  } else {
+    offers = [...winner.offers];
+    if (winner.randomizeOffers) offers.sort(() => Math.random() - 0.5);
+    if (winner.limitOffersShown) offers = offers.slice(0, winner.limitOffersShown);
+  }
 
   const payload = {
     id: winner.id,
-    type: winner.type,
+    type: SHOP_COLLECTION_VISUAL_ALIAS[winner.type] || winner.type,
     title: interpolate(
       winner.title || shopRow?.widgetTitle || "Frequently bought together",
       winner,
@@ -79,7 +108,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       autoMatchVariants: winner.autoMatchVariants,
     },
     appearance: {
-      accentColor: shopRow?.widgetAccentColor || "#000000",
+      accentColor: shopRow?.widgetAccentColor || "#4F46E5",
       textColor: shopRow?.widgetTextColor || "#202020",
       borderRadius: shopRow?.widgetBorderRadius || 8,
       fontFamily: shopRow?.widgetFontFamily || "inherit",
@@ -108,6 +137,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     { campaigns: [payload] },
     { headers: { "Cache-Control": "private, max-age=30" } },
   );
+  } catch (e) {
+    console.error("[selleasy proxy error]", e);
+    return json({ campaigns: [] });
+  }
 };
 
 function interpolate(template: string, c: any): string {
@@ -133,12 +166,16 @@ function interpolate(template: string, c: any): string {
   return result;
 }
 
-async function productInAnyCollection(
+// Tells us whether (and which) of a campaign's trigger collections contains
+// the current product — needed by "Shop the collection" campaigns to know
+// where to pull offers from, and by regular collection-triggered campaigns
+// to know whether they match at all.
+async function matchedCollectionId(
   admin: any,
   shop: string,
   productGid: string,
   collectionIds: string[],
-): Promise<boolean> {
+): Promise<string | null> {
   for (const colId of collectionIds) {
     const cached = await db.collectionProductCache.findUnique({
       where: { shop_collectionId: { shop, collectionId: colId } },
@@ -161,9 +198,9 @@ async function productInAnyCollection(
         },
       });
     }
-    if (productIds.includes(productGid)) return true;
+    if (productIds.includes(productGid)) return colId;
   }
-  return false;
+  return null;
 }
 
 async function fetchCollectionProducts(admin: any, collectionId: string): Promise<string[]> {
@@ -178,3 +215,49 @@ async function fetchCollectionProducts(admin: any, collectionId: string): Promis
   const data = await res.json();
   return data.data?.collection?.products?.nodes?.map((n: any) => n.id) || [];
 }
+
+// Full product details (title/handle/image) for "Shop the collection" offers —
+// excludes the product currently being viewed, capped at `limit`.
+async function fetchCollectionProductDetails(
+  admin: any,
+  collectionId: string,
+  excludeProductGid: string,
+  limit: number,
+): Promise<{ id: string; title: string; handle: string; image: string }[]> {
+  const res = await admin.graphql(
+    `query($id: ID!) {
+      collection(id: $id) {
+        products(first: 250) {
+          nodes { id title handle featuredImage { url } }
+        }
+      }
+    }`,
+    { variables: { id: collectionId } },
+  );
+  const data = await res.json();
+  const nodes = data.data?.collection?.products?.nodes || [];
+  return nodes
+    .filter((n: any) => n.id !== excludeProductGid)
+    .slice(0, limit)
+    .map((n: any) => ({
+      id: n.id,
+      title: n.title,
+      handle: n.handle,
+      image: n.featuredImage?.url || "",
+    }));
+}
+
+const SHOP_COLLECTION_TYPES = new Set([
+  "SHOP_COLLECTION_LIST",
+  "SHOP_COLLECTION_CAROUSEL",
+  "SHOP_COLLECTION_GRID",
+]);
+
+// Widget JS only knows how to render the underlying layout styles below —
+// "Shop the collection" campaigns just source offers differently server-side.
+const SHOP_COLLECTION_VISUAL_ALIAS: Record<string, string> = {
+  SHOP_COLLECTION_LIST: "ADDON_LIST",
+  SHOP_COLLECTION_CAROUSEL: "ADDON_CAROUSEL",
+  SHOP_COLLECTION_GRID: "ADDON_GRID",
+};
+

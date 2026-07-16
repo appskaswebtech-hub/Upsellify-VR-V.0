@@ -23,3 +23,9 @@ pnpm-lock.yaml
 # Ignore shopify files created during app dev
 .shopify/*
 .shopify.lock
+
+# Claude Code local session config
+.claude/
+
+# Stray local archive, not part of the app
+upsellify.zip

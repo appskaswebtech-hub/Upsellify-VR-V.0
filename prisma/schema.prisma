@@ -9,8 +9,8 @@ generator client {
 // enough when changing adapters.
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
-  provider = "sqlite"
-  url      = "file:dev.sqlite"
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 model Session {
@@ -41,6 +41,7 @@ model Shop {
   uninstalledAt         DateTime?
   currency              String    @default("USD")
   locale                String    @default("en")
+  localeIsAuto          Boolean   @default(true)
   timezone              String    @default("America/New_York")
 
   embedEnabled          Boolean   @default(false)

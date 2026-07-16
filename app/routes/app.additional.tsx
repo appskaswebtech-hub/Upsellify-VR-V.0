@@ -9,33 +9,32 @@ import {
   BlockStack,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
+import { useTranslation } from "../i18n/LanguageContext";
 
 export default function AdditionalPage() {
+  const { t } = useTranslation();
   return (
     <Page>
-      <TitleBar title="Additional page" />
+      <TitleBar title={t.additional.pageTitle} />
       <Layout>
         <Layout.Section>
           <Card>
             <BlockStack gap="300">
               <Text as="p" variant="bodyMd">
-                The app template comes with an additional page which
-                demonstrates how to create multiple pages within app navigation
-                using{" "}
+                {t.additional.intro1Prefix}{" "}
                 <Link
                   url="https://shopify.dev/docs/apps/tools/app-bridge"
                   target="_blank"
                   removeUnderline
                 >
-                  App Bridge
+                  {t.additional.intro1LinkText}
                 </Link>
                 .
               </Text>
               <Text as="p" variant="bodyMd">
-                To create your own page and have it show up in the app
-                navigation, add a page inside <Code>app/routes</Code>, and a
-                link to it in the <Code>&lt;NavMenu&gt;</Code> component found
-                in <Code>app/routes/app.jsx</Code>.
+                {t.additional.intro2Prefix} <Code>{t.additional.intro2Middle}</Code>
+                {t.additional.intro2Suffix}{" "}
+                <Code>app/routes/app.jsx</Code>.
               </Text>
             </BlockStack>
           </Card>
@@ -44,7 +43,7 @@ export default function AdditionalPage() {
           <Card>
             <BlockStack gap="200">
               <Text as="h2" variant="headingMd">
-                Resources
+                {t.additional.resourcesHeading}
               </Text>
               <List>
                 <List.Item>
@@ -53,7 +52,7 @@ export default function AdditionalPage() {
                     target="_blank"
                     removeUnderline
                   >
-                    App nav best practices
+                    {t.additional.navBestPractices}
                   </Link>
                 </List.Item>
               </List>

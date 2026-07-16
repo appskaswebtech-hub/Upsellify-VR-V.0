@@ -2,16 +2,21 @@
 
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { useActionData, useLoaderData, useSubmit } from "@remix-run/react";
-import { useState, useCallback } from "react";
+import { useActionData, useLoaderData, useSubmit, useNavigate } from "@remix-run/react";
+import { useState, useCallback, useEffect, type ReactNode } from "react";
 import {
   Page, Layout, Card, BlockStack, InlineStack, TextField, Select, Button,
-  Text, Badge, Thumbnail, Box, Banner, Checkbox,
+  Text, Badge, Thumbnail, Box, Checkbox, Modal, Icon,
 } from "@shopify/polaris";
-import { DeleteIcon } from "@shopify/polaris-icons";
+import {
+  DeleteIcon, TargetIcon, ProductAddIcon, SettingsIcon, DiscountIcon,
+  CalendarIcon, FlagIcon, PaintBrushFlatIcon, LockIcon,
+} from "@shopify/polaris-icons";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { useTranslation } from "../i18n/LanguageContext";
+import type { Dictionary } from "../i18n";
 
 type PickedResource = { id: string; title: string; handle?: string; image?: string };
 type Tier = { id?: string; minItems: number; valueType: "PERCENTAGE" | "FIXED"; value: number; label?: string };
@@ -34,12 +39,15 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   });
   if (!campaign) throw new Response("Not found", { status: 404 });
 
-  const shopRow = await db.shop.findUnique({ where: { shop: session.shop } });
+  const [shopRow, shopPlan] = await Promise.all([
+    db.shop.findUnique({ where: { shop: session.shop } }),
+    db.shopPlan.findUnique({ where: { shop: session.shop } }),
+  ]);
 
   return {
     campaign,
     shopTimezone: shopRow?.timezone || "America/New_York",
-    plan: shopRow?.plan ?? "free", // ✅ Pass plan to frontend
+    plan: shopPlan?.plan ?? "free",
   };
 };
 
@@ -63,6 +71,12 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       await syncShopifyDiscount({ admin, shop: session.shop });
     } catch (e) {
       console.error("Discount sync failed on delete:", e);
+    }
+    try {
+      const { syncPostPurchaseMetafields } = await import("../services/post-purchase-sync.server");
+      await syncPostPurchaseMetafields({ admin, shop: session.shop });
+    } catch (e) {
+      console.error("PP metafield sync failed on delete:", e);
     }
     return redirect("/app/campaigns");
   }
@@ -176,6 +190,13 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       console.error("Discount sync failed:", e);
     }
 
+    try {
+      const { syncPostPurchaseMetafields } = await import("../services/post-purchase-sync.server");
+      await syncPostPurchaseMetafields({ admin, shop: session.shop });
+    } catch (e) {
+      console.error("PP metafield sync failed:", e);
+    }
+
     return json({ ok: true });
   }
 
@@ -183,16 +204,31 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
 };
 
 export default function CampaignEditor() {
-  const { campaign, shopTimezone, plan } = useLoaderData<typeof loader>(); // ✅ get plan
+  const { campaign, shopTimezone, plan } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const shopify = useAppBridge();
   const submit = useSubmit();
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+
+  const [showSaved, setShowSaved] = useState(false);
+  useEffect(() => {
+    if (actionData?.ok) {
+      setShowSaved(true);
+      const t = setTimeout(() => {
+        setShowSaved(false);
+        navigate("/app/campaigns");
+      }, 2000);
+      return () => clearTimeout(t);
+    }
+  }, [actionData]);
 
   const [name, setName] = useState(campaign.name);
   const [status, setStatus] = useState(campaign.status);
   const [title, setTitle] = useState(campaign.title ?? "");
   const [subtitle, setSubtitle] = useState(campaign.subtitle ?? "");
   const [priority, setPriority] = useState(String(campaign.priority));
+  const isShopCollection = campaign.type.startsWith("SHOP_COLLECTION");
   const [triggerType, setTriggerType] = useState(campaign.triggerType);
 
   const [triggers, setTriggers] = useState<PickedResource[]>(
@@ -212,20 +248,21 @@ export default function CampaignEditor() {
     })),
   );
 
+  const initTz = campaign.timezone || shopTimezone;
   const [startDate, setStartDate] = useState(
-    campaign.startDate ? toDateInput(campaign.startDate) : toDateInput(new Date()),
+    campaign.startDate ? toDateInput(campaign.startDate, initTz) : toDateInput(new Date(), initTz),
   );
   const [startTime, setStartTime] = useState(
-    campaign.startDate ? toTimeInput(campaign.startDate) : "00:00",
+    campaign.startDate ? toTimeInput(campaign.startDate, initTz) : "00:00",
   );
   const [endEnabled, setEndEnabled] = useState(!!campaign.endDate);
   const [endDate, setEndDateValue] = useState(
-    campaign.endDate ? toDateInput(campaign.endDate) : "",
+    campaign.endDate ? toDateInput(campaign.endDate, initTz) : "",
   );
   const [endTime, setEndTime] = useState(
-    campaign.endDate ? toTimeInput(campaign.endDate) : "23:59",
+    campaign.endDate ? toTimeInput(campaign.endDate, initTz) : "23:59",
   );
-  const [timezone, setTimezone] = useState(campaign.timezone || shopTimezone);
+  const [timezone, setTimezone] = useState(initTz);
 
   const [showQuantityPicker, setShowQuantityPicker] = useState(campaign.showQuantityPicker);
   const [allowDeselectTrigger, setAllowDeselectTrigger] = useState(campaign.allowDeselectTrigger);
@@ -297,8 +334,8 @@ export default function CampaignEditor() {
       triggerType,
       triggers: triggerType === "ALL_PRODUCTS" ? [] : triggers,
       offers,
-      startDate: combineDateTime(startDate, startTime),
-      endDate: endEnabled ? combineDateTime(endDate, endTime) : null,
+      startDate: combineDateTime(startDate, startTime, timezone),
+      endDate: endEnabled ? combineDateTime(endDate, endTime, timezone) : null,
       timezone,
       settings: {
         showQuantityPicker,
@@ -323,8 +360,9 @@ export default function CampaignEditor() {
     submit(fd, { method: "post" });
   };
 
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+
   const handleDelete = () => {
-    if (!confirm("Delete this campaign?")) return;
     const fd = new FormData();
     fd.append("intent", "delete");
     submit(fd, { method: "post" });
@@ -332,21 +370,112 @@ export default function CampaignEditor() {
 
   return (
     <Page
-      backAction={{ content: "Campaigns", url: "/app/campaigns" }}
+      backAction={{ content: t.campaignsIndex.title, url: "/app/campaigns" }}
       title={campaign.type.replace(/_/g, " ")}
       titleMetadata={
-        <Badge tone={status === "ACTIVE" ? "success" : "info"}>{status}</Badge>
+        <Badge tone={status === "ACTIVE" ? "success" : "info"}>{t.campaignsIndex.statusLabels[status] ?? status}</Badge>
       }
-      primaryAction={{ content: "Save", onAction: handleSave }}
+      primaryAction={{ content: t.common.save, onAction: handleSave }}
       secondaryActions={[
-        { content: "Delete", destructive: true, onAction: handleDelete },
+        { content: t.common.delete, destructive: true, onAction: () => setDeleteModalOpen(true) },
       ]}
     >
       <TitleBar title={campaign.name} />
-      {actionData?.ok && (
-        <Box paddingBlockEnd="400">
-          <Banner tone="success" title="Saved" />
-        </Box>
+      <Modal
+        open={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        title={t.campaignsIndex.deleteModal.title}
+        primaryAction={{
+          content: t.campaignsIndex.deleteModal.confirm,
+          destructive: true,
+          onAction: () => {
+            setDeleteModalOpen(false);
+            handleDelete();
+          },
+        }}
+        secondaryActions={[
+          { content: t.campaignsIndex.deleteModal.cancel, onAction: () => setDeleteModalOpen(false) },
+        ]}
+      >
+        <Modal.Section>
+          <Text as="p">
+            {t.campaignsIndex.deleteModal.body(campaign.name)}
+          </Text>
+        </Modal.Section>
+      </Modal>
+      {showSaved && (
+        <>
+          <style>{`
+            @keyframes slSavedBackdropIn {
+              0% { opacity: 0; backdrop-filter: blur(0px); }
+              100% { opacity: 1; backdrop-filter: blur(3px); }
+            }
+            @keyframes slSavedPop {
+              0% { transform: scale(0.7); opacity: 0; }
+              60% { transform: scale(1.06); opacity: 1; }
+              100% { transform: scale(1); opacity: 1; }
+            }
+            @keyframes slSavedFadeOut {
+              0% { opacity: 1; }
+              100% { opacity: 0; }
+            }
+            @keyframes slSavedDrawCheck {
+              0% { stroke-dashoffset: 24; }
+              100% { stroke-dashoffset: 0; }
+            }
+            .sl-saved-overlay {
+              position: fixed;
+              inset: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              z-index: 1000;
+              pointer-events: none;
+              background: rgba(0,0,0,0.12);
+              -webkit-backdrop-filter: blur(3px);
+              backdrop-filter: blur(3px);
+              animation: slSavedBackdropIn 0.3s ease-out,
+                         slSavedFadeOut 0.4s ease-in 1.6s forwards;
+            }
+            .sl-saved-overlay__card {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              gap: 10px;
+              background: #fff;
+              padding: 36px 48px;
+              border-radius: 16px;
+              box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+              animation: slSavedPop 0.35s ease-out,
+                         slSavedFadeOut 0.4s ease-in 1.6s forwards;
+            }
+            .sl-saved-overlay__check {
+              width: 60px;
+              height: 60px;
+              border-radius: 50%;
+              background: #008060;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .sl-saved-overlay__check path {
+              stroke-dasharray: 24;
+              stroke-dashoffset: 24;
+              animation: slSavedDrawCheck 0.4s ease-out 0.25s forwards;
+            }
+          `}</style>
+          <div className="sl-saved-overlay">
+            <div className="sl-saved-overlay__card">
+              <div className="sl-saved-overlay__check">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                  <path d="M5 13l4 4L19 7" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <Text as="p" variant="headingMd">{t.campaignDetail.savedOverlay.title}</Text>
+              <Text as="p" tone="subdued">{t.campaignDetail.savedOverlay.subtitle}</Text>
+            </div>
+          </div>
+        </>
       )}
 
       <Layout>
@@ -354,7 +483,7 @@ export default function CampaignEditor() {
           <BlockStack gap="400">
             <Card>
               <TextField
-                label="Campaign name — for internal reference"
+                label={t.campaignDetail.campaignNameLabel}
                 value={name}
                 onChange={setName}
                 autoComplete="off"
@@ -363,16 +492,16 @@ export default function CampaignEditor() {
 
             <Card>
               <BlockStack gap="300">
-                <Text as="h3" variant="headingSm">Trigger</Text>
+                <SectionTitle icon={TargetIcon} color="#4F46E5">{t.campaignDetail.trigger.sectionTitle}</SectionTitle>
                 <Text as="p" tone="subdued">
-                  Select the products or collections that trigger this campaign.
+                  {t.campaignDetail.trigger.description}
                 </Text>
                 <Select
-                  label="Type"
+                  label={t.campaignDetail.trigger.typeLabel}
                   options={[
-                    { label: "All products", value: "ALL_PRODUCTS" },
-                    { label: "Specific products", value: "SPECIFIC_PRODUCTS" },
-                    { label: "Specific collections", value: "SPECIFIC_COLLECTIONS" },
+                    { label: t.campaignDetail.trigger.allProducts, value: "ALL_PRODUCTS" },
+                    { label: t.campaignDetail.trigger.specificProducts, value: "SPECIFIC_PRODUCTS" },
+                    { label: t.campaignDetail.trigger.specificCollections, value: "SPECIFIC_COLLECTIONS" },
                   ]}
                   value={triggerType}
                   onChange={setTriggerType}
@@ -382,7 +511,8 @@ export default function CampaignEditor() {
                     items={triggers}
                     onAdd={() => pickProducts("trigger")}
                     onRemove={(id) => setTriggers((p) => p.filter((x) => x.id !== id))}
-                    addLabel="Browse products"
+                    addLabel={t.campaignDetail.trigger.browseProducts}
+                    removeLabel={t.campaignDetail.resourceList.remove}
                   />
                 )}
                 {triggerType === "SPECIFIC_COLLECTIONS" && (
@@ -390,7 +520,8 @@ export default function CampaignEditor() {
                     items={triggers}
                     onAdd={pickCollections}
                     onRemove={(id) => setTriggers((p) => p.filter((x) => x.id !== id))}
-                    addLabel="Browse collections"
+                    addLabel={t.campaignDetail.trigger.browseCollections}
+                    removeLabel={t.campaignDetail.resourceList.remove}
                   />
                 )}
               </BlockStack>
@@ -398,50 +529,53 @@ export default function CampaignEditor() {
 
             <Card>
               <BlockStack gap="300">
-                <Text as="h3" variant="headingSm">Offers</Text>
+                <SectionTitle icon={ProductAddIcon} color="#0D9488">{t.campaignDetail.offers.sectionTitle}</SectionTitle>
                 <Text as="p" tone="subdued">
-                  The selected products will be offered as a bundle along with the trigger.
+                  {isShopCollection
+                    ? t.campaignDetail.offers.descriptionAuto
+                    : t.campaignDetail.offers.descriptionManual}
                 </Text>
                 <ResourceList
                   items={offers}
                   onAdd={() => pickProducts("offer")}
                   onRemove={(id) => setOffers((p) => p.filter((x) => x.id !== id))}
-                  addLabel="Browse products"
+                  addLabel={t.campaignDetail.trigger.browseProducts}
+                  removeLabel={t.campaignDetail.resourceList.remove}
                 />
               </BlockStack>
             </Card>
 
             <Card>
               <BlockStack gap="300">
-                <Text as="h3" variant="headingSm">Campaign settings</Text>
+                <SectionTitle icon={SettingsIcon} color="#71717A">{t.campaignDetail.settings.sectionTitle}</SectionTitle>
                 <Checkbox
-                  label="Show quantity picker"
+                  label={t.campaignDetail.settings.showQuantityPicker}
                   checked={showQuantityPicker}
                   onChange={setShowQuantityPicker}
                 />
                 <Checkbox
-                  label="Allow customers to de-select the trigger product"
+                  label={t.campaignDetail.settings.allowDeselectTrigger}
                   checked={allowDeselectTrigger}
                   onChange={setAllowDeselectTrigger}
                 />
                 <Checkbox
-                  label="Do not preselect the items in the bundle"
+                  label={t.campaignDetail.settings.doNotPreselect}
                   checked={doNotPreselect}
                   onChange={setDoNotPreselect}
                 />
                 <Checkbox
-                  label="Randomize the order of offer products"
+                  label={t.campaignDetail.settings.randomizeOffers}
                   checked={randomizeOffers}
                   onChange={setRandomizeOffers}
                 />
                 <Checkbox
-                  label="Limit number of offered products shown"
+                  label={t.campaignDetail.settings.limitOffersShown}
                   checked={limitEnabled}
                   onChange={setLimitEnabled}
                 />
                 {limitEnabled && (
                   <TextField
-                    label="Max offers"
+                    label={t.campaignDetail.settings.maxOffers}
                     type="number"
                     value={limitValue}
                     onChange={setLimitValue}
@@ -450,8 +584,8 @@ export default function CampaignEditor() {
                   />
                 )}
                 <Checkbox
-                  label="Automatically match offer product variants with the trigger product"
-                  helpText="Variant match will be attempted based on the variant name."
+                  label={t.campaignDetail.settings.autoMatchVariants}
+                  helpText={t.campaignDetail.settings.autoMatchVariantsHelp}
                   checked={autoMatchVariants}
                   onChange={setAutoMatchVariants}
                 />
@@ -460,21 +594,21 @@ export default function CampaignEditor() {
 
             <Card>
               <BlockStack gap="300">
-                <Text as="h3" variant="headingSm">Discounts</Text>
+                <SectionTitle icon={DiscountIcon} color="#DB2777">{t.campaignDetail.discounts.sectionTitle}</SectionTitle>
                 <Select
-                  label="Type"
+                  label={t.campaignDetail.discounts.typeLabel}
                   options={[
-                    { label: "No discount", value: "NONE" },
-                    { label: "Percentage off", value: "PERCENTAGE" },
-                    { label: "Fixed amount off", value: "FIXED" },
-                    { label: "Tiered (Buy X get Y%)", value: "TIERED" },
+                    { label: t.campaignDetail.discounts.noDiscount, value: "NONE" },
+                    { label: t.campaignDetail.discounts.percentageOff, value: "PERCENTAGE" },
+                    { label: t.campaignDetail.discounts.fixedAmountOff, value: "FIXED" },
+                    { label: t.campaignDetail.discounts.tieredLabel, value: "TIERED" },
                   ]}
                   value={discountType}
                   onChange={(v) => setDiscountType(v as any)}
                 />
                 {(discountType === "PERCENTAGE" || discountType === "FIXED") && (
                   <TextField
-                    label={discountType === "PERCENTAGE" ? "Percentage off" : "Amount off"}
+                    label={discountType === "PERCENTAGE" ? t.campaignDetail.discounts.percentageOff : t.campaignDetail.discounts.amountOff}
                     type="number"
                     value={discountValue}
                     onChange={setDiscountValue}
@@ -483,7 +617,7 @@ export default function CampaignEditor() {
                   />
                 )}
                 {discountType === "TIERED" && (
-                  <TierEditor tiers={tiers} onChange={setTiers} />
+                  <TierEditor tiers={tiers} onChange={setTiers} t={t} />
                 )}
               </BlockStack>
             </Card>
@@ -491,16 +625,16 @@ export default function CampaignEditor() {
             <Card>
               <BlockStack gap="300">
                 <InlineStack align="space-between">
-                  <Text as="h3" variant="headingSm">Schedule campaign</Text>
+                  <SectionTitle icon={CalendarIcon} color="#D97706">{t.campaignDetail.schedule.sectionTitle}</SectionTitle>
                   <Text as="span" tone="subdued">{timezone}</Text>
                 </InlineStack>
                 <Text as="p" tone="subdued">
-                  Choose start and end dates to control when the campaign is live.
+                  {t.campaignDetail.schedule.description}
                 </Text>
                 <InlineStack gap="300">
                   <Box minWidth="200px">
                     <TextField
-                      label="Start date"
+                      label={t.campaignDetail.schedule.startDate}
                       type="date"
                       value={startDate}
                       onChange={setStartDate}
@@ -509,7 +643,7 @@ export default function CampaignEditor() {
                   </Box>
                   <Box minWidth="140px">
                     <TextField
-                      label="Start time"
+                      label={t.campaignDetail.schedule.startTime}
                       type="time"
                       value={startTime}
                       onChange={setStartTime}
@@ -517,12 +651,12 @@ export default function CampaignEditor() {
                     />
                   </Box>
                 </InlineStack>
-                <Checkbox label="Set end date" checked={endEnabled} onChange={setEndEnabled} />
+                <Checkbox label={t.campaignDetail.schedule.setEndDate} checked={endEnabled} onChange={setEndEnabled} />
                 {endEnabled && (
                   <InlineStack gap="300">
                     <Box minWidth="200px">
                       <TextField
-                        label="End date"
+                        label={t.campaignDetail.schedule.endDate}
                         type="date"
                         value={endDate}
                         onChange={setEndDateValue}
@@ -531,7 +665,7 @@ export default function CampaignEditor() {
                     </Box>
                     <Box minWidth="140px">
                       <TextField
-                        label="End time"
+                        label={t.campaignDetail.schedule.endTime}
                         type="time"
                         value={endTime}
                         onChange={setEndTime}
@@ -541,7 +675,7 @@ export default function CampaignEditor() {
                   </InlineStack>
                 )}
                 <Select
-                  label="Timezone"
+                  label={t.campaignDetail.schedule.timezone}
                   options={TIMEZONES.map((tz) => ({ label: tz, value: tz }))}
                   value={timezone}
                   onChange={setTimezone}
@@ -551,30 +685,30 @@ export default function CampaignEditor() {
 
             <Card>
               <BlockStack gap="300">
-                <Text as="h3" variant="headingSm">Other settings</Text>
+                <SectionTitle icon={FlagIcon} color="#7C3AED">{t.campaignDetail.otherSettings.sectionTitle}</SectionTitle>
                 <TextField
-                  label="Campaign title"
+                  label={t.campaignDetail.otherSettings.campaignTitle}
                   value={title}
                   onChange={setTitle}
-                  placeholder="Optional. Eg: People also bought"
-                  helpText="Overrides the widget's default title."
+                  placeholder={t.campaignDetail.otherSettings.campaignTitlePlaceholder}
+                  helpText={t.campaignDetail.otherSettings.campaignTitleHelp}
                   autoComplete="off"
                 />
                 <TextField
-                  label="Campaign sub-title"
+                  label={t.campaignDetail.otherSettings.campaignSubtitle}
                   value={subtitle}
                   onChange={setSubtitle}
-                  placeholder="Optional. Eg: Flaunt your style with this outfit"
-                  helpText="Supports {{discount}} and {{timer}}."
+                  placeholder={t.campaignDetail.otherSettings.campaignSubtitlePlaceholder}
+                  helpText={t.campaignDetail.otherSettings.campaignSubtitleHelp}
                   autoComplete="off"
                 />
                 <TextField
-                  label="Campaign priority"
+                  label={t.campaignDetail.otherSettings.priority}
                   type="number"
                   value={priority}
                   onChange={setPriority}
                   placeholder="10"
-                  helpText="Higher priority wins when multiple campaigns match."
+                  helpText={t.campaignDetail.otherSettings.priorityHelp}
                   autoComplete="off"
                 />
               </BlockStack>
@@ -582,11 +716,11 @@ export default function CampaignEditor() {
 
             <Card>
               <Select
-                label="Status"
+                label={t.campaignDetail.status.label}
                 options={[
-                  { label: "Active", value: "ACTIVE" },
-                  { label: "Draft", value: "DRAFT" },
-                  { label: "Paused", value: "PAUSED" },
+                  { label: t.campaignDetail.status.active, value: "ACTIVE" },
+                  { label: t.campaignDetail.status.draft, value: "DRAFT" },
+                  { label: t.campaignDetail.status.paused, value: "PAUSED" },
                 ]}
                 value={status}
                 onChange={setStatus}
@@ -595,41 +729,62 @@ export default function CampaignEditor() {
           </BlockStack>
         </Layout.Section>
 
-        {/* ✅ Sidebar — Customize widget gated by plan */}
+        {/* Sidebar — Customize widget gated by plan */}
         <Layout.Section variant="oneThird">
           <Card>
             <BlockStack gap="300">
-              <Text as="h3" variant="headingSm">Customize appearance</Text>
+              <SectionTitle icon={PaintBrushFlatIcon} color="#4F46E5">{t.campaignDetail.appearance.sectionTitle}</SectionTitle>
               <Text as="p" tone="subdued">
-                The styling, text, and translations can be customised from the widget settings.
+                {t.campaignDetail.appearance.description}
               </Text>
 
               {plan === "free" ? (
-                // Free plan: redirect to upgrade
-                <Button url="/app/plans" variant="plain">
-                  🔒 Upgrade to customize widget
+                <Button url="/app/plans" variant="plain" icon={LockIcon}>
+                  {t.campaignDetail.appearance.upgradeCta}
                 </Button>
               ) : (
                 // Basic or Advanced: full access
-                <Button url="/app/customize">Customize widget</Button>
+                <Button url="/app/customize">{t.campaignDetail.appearance.customizeCta}</Button>
               )}
             </BlockStack>
           </Card>
         </Layout.Section>
       </Layout>
+
+      <Box paddingBlockStart="400" paddingBlockEnd="800">
+        <InlineStack align="end">
+          <Button variant="primary" onClick={handleSave}>{t.common.save}</Button>
+        </InlineStack>
+      </Box>
     </Page>
   );
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
+function SectionTitle({ icon, color, children }: { icon: any; color: string; children: ReactNode }) {
+  return (
+    <InlineStack gap="300" blockAlign="center">
+      <div style={{
+        width: "28px", height: "28px", borderRadius: "7px",
+        background: color, display: "flex", alignItems: "center",
+        justifyContent: "center", flexShrink: 0, color: "#fff",
+      }}>
+        <Icon source={icon} tone="inherit" />
+      </div>
+      <Text as="h3" variant="headingSm">{children}</Text>
+    </InlineStack>
+  );
+}
+
 function ResourceList({
-  items, onAdd, onRemove, addLabel,
+  items, onAdd, onRemove, addLabel, removeLabel,
 }: {
   items: PickedResource[];
   onAdd: () => void;
   onRemove: (id: string) => void;
   addLabel: string;
+  removeLabel: string;
 }) {
   return (
     <BlockStack gap="200">
@@ -647,7 +802,7 @@ function ResourceList({
               icon={DeleteIcon}
               variant="tertiary"
               onClick={() => onRemove(p.id)}
-              accessibilityLabel="Remove"
+              accessibilityLabel={removeLabel}
             />
           </InlineStack>
         </Box>
@@ -656,7 +811,7 @@ function ResourceList({
   );
 }
 
-function TierEditor({ tiers, onChange }: { tiers: Tier[]; onChange: (t: Tier[]) => void }) {
+function TierEditor({ tiers, onChange, t }: { tiers: Tier[]; onChange: (t: Tier[]) => void; t: Dictionary }) {
   const update = (i: number, patch: Partial<Tier>) => {
     const next = [...tiers];
     next[i] = { ...next[i], ...patch };
@@ -668,16 +823,16 @@ function TierEditor({ tiers, onChange }: { tiers: Tier[]; onChange: (t: Tier[]) 
 
   return (
     <BlockStack gap="300">
-      <Text as="p" tone="subdued">Configure discount tiers, e.g. "Buy 4, get 25%".</Text>
-      {tiers.map((t, i) => (
+      <Text as="p" tone="subdued">{t.campaignDetail.tiers.helperText}</Text>
+      {tiers.map((tier, i) => (
         <Box key={i} padding="300" background="bg-surface-secondary" borderRadius="200">
           <InlineStack gap="200" align="space-between" blockAlign="end">
             <InlineStack gap="200">
               <Box minWidth="110px">
                 <TextField
-                  label="Min items"
+                  label={t.campaignDetail.tiers.minItems}
                   type="number"
-                  value={String(t.minItems)}
+                  value={String(tier.minItems)}
                   onChange={(v) => update(i, { minItems: Number(v) })}
                   autoComplete="off"
                   min={1}
@@ -685,20 +840,20 @@ function TierEditor({ tiers, onChange }: { tiers: Tier[]; onChange: (t: Tier[]) 
               </Box>
               <Box minWidth="140px">
                 <Select
-                  label="Type"
+                  label={t.campaignDetail.tiers.typeLabel}
                   options={[
-                    { label: "Percentage", value: "PERCENTAGE" },
-                    { label: "Fixed amount", value: "FIXED" },
+                    { label: t.campaignDetail.tiers.percentage, value: "PERCENTAGE" },
+                    { label: t.campaignDetail.tiers.fixedAmount, value: "FIXED" },
                   ]}
-                  value={t.valueType}
+                  value={tier.valueType}
                   onChange={(v) => update(i, { valueType: v as any })}
                 />
               </Box>
               <Box minWidth="110px">
                 <TextField
-                  label={t.valueType === "PERCENTAGE" ? "% off" : "Amount"}
+                  label={tier.valueType === "PERCENTAGE" ? t.campaignDetail.tiers.percentOff : t.campaignDetail.tiers.amount}
                   type="number"
-                  value={String(t.value)}
+                  value={String(tier.value)}
                   onChange={(v) => update(i, { value: Number(v) })}
                   autoComplete="off"
                 />
@@ -708,13 +863,13 @@ function TierEditor({ tiers, onChange }: { tiers: Tier[]; onChange: (t: Tier[]) 
               icon={DeleteIcon}
               variant="tertiary"
               onClick={() => remove(i)}
-              accessibilityLabel="Remove tier"
+              accessibilityLabel={t.campaignDetail.tiers.removeTier}
             />
           </InlineStack>
         </Box>
       ))}
       <InlineStack>
-        <Button onClick={add}>Add tier</Button>
+        <Button onClick={add}>{t.campaignDetail.tiers.addTier}</Button>
       </InlineStack>
     </BlockStack>
   );
@@ -727,17 +882,37 @@ function dedupe(arr: PickedResource[]): PickedResource[] {
   return arr.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
 }
 
-function toDateInput(d: Date | string) {
-  const dt = new Date(d);
-  return dt.toISOString().slice(0, 10);
+function tzParts(d: Date, timezone: string): Record<string, string> {
+  const parts: Record<string, string> = {};
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  }).formatToParts(d).forEach((p) => { parts[p.type] = p.value; });
+  return parts;
 }
 
-function toTimeInput(d: Date | string) {
+function toDateInput(d: Date | string, timezone?: string) {
   const dt = new Date(d);
-  return dt.toISOString().slice(11, 16);
+  if (!timezone) return dt.toISOString().slice(0, 10);
+  const p = tzParts(dt, timezone);
+  return `${p.year}-${p.month}-${p.day}`;
 }
 
-function combineDateTime(date: string, time: string): string | null {
+function toTimeInput(d: Date | string, timezone?: string) {
+  const dt = new Date(d);
+  if (!timezone) return dt.toISOString().slice(11, 16);
+  const p = tzParts(dt, timezone);
+  return `${p.hour}:${p.minute}`;
+}
+
+function combineDateTime(date: string, time: string, timezone: string): string | null {
   if (!date) return null;
-  return new Date(`${date}T${time || "00:00"}:00Z`).toISOString();
+  // Parse the local date/time in the given IANA timezone → UTC
+  const probe = new Date(`${date}T${time || "00:00"}:00Z`);
+  const p = tzParts(probe, timezone);
+  const localInTZ = new Date(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}Z`);
+  const offsetMs = localInTZ.getTime() - probe.getTime();
+  return new Date(probe.getTime() - offsetMs).toISOString();
 }

@@ -27,6 +27,11 @@
 # }
 
 query CartInput {
+  localization {
+    language {
+      isoCode
+    }
+  }
   cart {
     lines {
       id

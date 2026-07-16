@@ -4,10 +4,11 @@ import {
   Page, Layout, Card, BlockStack, InlineStack,
   Text, Button, Badge, Icon, Box,
 } from "@shopify/polaris";
-import { CheckCircleIcon, InfoIcon } from "@shopify/polaris-icons";
+import { CheckCircleIcon, InfoIcon, StarFilledIcon, WandIcon } from "@shopify/polaris-icons";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { useTranslation } from "../i18n/LanguageContext";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -23,6 +24,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     create: { shop: session.shop },
   });
 
+  const shopPlan = await db.shopPlan.upsert({
+    where: { shop: session.shop },
+    update: {},
+    create: { shop: session.shop, plan: "free", status: "active" },
+  });
+  const effectivePlan = shopPlan.status === "active" ? shopPlan.plan : "free";
+
   const campaignCount = await db.campaign.count({
     where: { shop: session.shop, deletedAt: null },
   });
@@ -31,79 +39,73 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shop,
     campaignCount,
     shopDomain: session.shop,
-    plan: shop.plan ?? "free", // ✅ Step 1: plan ko loader se return karo
+    plan: effectivePlan,
     host,
   };
 };
 
 export default function Index() {
-  // ✅ Step 2: plan ko destructure karo
-  const {
-  shop,
-  campaignCount,
-  shopDomain,
-  plan,
-  host,
-
-} = useLoaderData<typeof loader>();
+  const { shop, campaignCount, shopDomain, plan, host } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const steps = [
     {
       key: "embed",
-      title: "Activate the app embed",
-      description: "Enable the Selleasy app embed in your theme editor.",
+      title: t.dashboard.embedStep.title,
+      description: t.dashboard.embedStep.description,
       done: shop.embedEnabled,
       cta: (
-        <Button
-          url={`https://${shopDomain}/admin/themes/current/editor?context=apps`}
-          target="_top"
-          variant="primary"
-        >
-          Enable app embed
-        </Button>
+        <div style={{ fontSize: "13px", color: "#374151", lineHeight: 1.8, padding: "2px 0" }}>
+          {t.dashboard.embedStep.instructionPrefix} <strong>{t.dashboard.embedStep.instructionPath}</strong> {t.dashboard.embedStep.instructionSuffix} <strong>Upsellify</strong>
+        </div>
       ),
     },
     {
       key: "campaign",
-      title: "Create your first campaign",
-      description: "Launch a Frequently Bought Together bundle.",
+      title: t.dashboard.campaignStep.title,
+      description: t.dashboard.campaignStep.description,
       done: campaignCount > 0,
       cta: (
         <Button
   url={`/app/campaigns/new?host=${host}&shop=${shopDomain}`}
   variant="primary"
 >
-          Create campaign
+          {t.dashboard.campaignStep.cta}
         </Button>
       ),
     },
     {
       key: "verify",
-      title: "Verify your store setup",
-      description: "Test that the widget shows on a product page.",
+      title: t.dashboard.verifyStep.title,
+      description: t.dashboard.verifyStep.description,
       done: shop.storeVerified,
       cta: <Button
   url={`/app/campaigns`}
->Test in store</Button>,
+>{t.dashboard.verifyStep.cta}</Button>,
     },
   ];
 
   const completed = steps.filter((s) => s.done).length;
+  const progressPct = Math.round((completed / steps.length) * 100);
 
-  // ✅ Step 3: condition ab kaam karegi kyunki plan available hai
-  const isFreePlan    = plan === "free";
-  const isBasicPlan   = plan === "basic";
-  const isAdvancedPlan = plan === "advanced";
+  const isFreePlan = plan === "free";
+  const isBasicPlan = plan === "basic";
 
   return (
     <Page>
-      <TitleBar title="Dashboard" />
+      <TitleBar title={t.dashboard.title} />
 
-      {/* ✅ Condition: Free plan walo ko upgrade banner dikhao */}
+      <PageHeader
+        title={t.dashboard.title}
+        subtitle={t.dashboard.subtitle}
+        plan={plan}
+        planSuffix={t.dashboard.planSuffix}
+      />
+
       {isFreePlan && (
         <div style={{
-          background: "linear-gradient(135deg, #1a1f6e, #4f6af0)",
+          background: "linear-gradient(135deg, #4338CA, #6D5EF0)",
           borderRadius: "12px",
           padding: "20px 24px",
           marginBottom: "20px",
@@ -112,25 +114,35 @@ export default function Index() {
           justifyContent: "space-between",
           flexWrap: "wrap",
           gap: "12px",
+          boxShadow: "0 6px 20px rgba(79, 70, 229, 0.25)",
         }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: "15px", color: "#fff", marginBottom: "4px" }}>
-              🚀 You're on the Free Plan
+          <InlineStack gap="300" blockAlign="center">
+            <div style={{
+              width: "32px", height: "32px", borderRadius: "8px",
+              background: "rgba(255,255,255,0.15)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0, color: "#fff",
+            }}>
+              <Icon source={StarFilledIcon} tone="inherit" />
             </div>
-            <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.75)" }}>
-              Upgrade to unlock campaigns, analytics & more.
+            <div>
+              <div style={{ fontWeight: 700, fontSize: "15px", color: "#fff", marginBottom: "4px" }}>
+                {t.dashboard.freePlanBanner.title}
+              </div>
+              <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.8)" }}>
+                {t.dashboard.freePlanBanner.subtitle}
+              </div>
             </div>
-          </div>
+          </InlineStack>
           <Button
             url={`/app/plans?shop=${shopDomain}&host=${host}`}
             variant="primary"
           >
-            View Plans →
+            {t.dashboard.freePlanBanner.cta}
           </Button>
         </div>
       )}
 
-      {/* ✅ Condition: Basic plan walo ko advanced upgrade hint dikhao */}
       {isBasicPlan && (
         <div style={{
           background: "linear-gradient(135deg, #fef3c7, #fde68a)",
@@ -144,45 +156,45 @@ export default function Index() {
           flexWrap: "wrap",
           gap: "12px",
         }}>
-          <div style={{ fontSize: "13.5px", color: "#92400e", fontWeight: 600 }}>
-            ⭐ Upgrade to Advanced for unlimited campaigns & priority support
-          </div>
+          <InlineStack gap="200" blockAlign="center">
+            <Icon source={StarFilledIcon} tone="warning" />
+            <div style={{ fontSize: "13.5px", color: "#92400e", fontWeight: 600 }}>
+              {t.dashboard.basicPlanBanner.text}
+            </div>
+          </InlineStack>
           <Button
             url={`/app/plans?shop=${shopDomain}&host=${host}`}
             variant="primary"
           >
-            Upgrade →
+            {t.dashboard.basicPlanBanner.cta}
           </Button>
         </div>
       )}
 
-      {/* ✅ Condition: Advanced plan walo ko appreciation dikhao */}
-      {isAdvancedPlan && (
-        <div style={{
-          background: "linear-gradient(135deg, #f0fdf4, #dcfce7)",
-          border: "1px solid #86efac",
-          borderRadius: "12px",
-          padding: "14px 20px",
-          marginBottom: "20px",
-        }}>
-          <div style={{ fontSize: "13.5px", color: "#166534", fontWeight: 600 }}>
-            ✅ Advanced Plan Active — You have access to all features!
-          </div>
-        </div>
-      )}
 
       <Layout>
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
               <InlineStack align="space-between" blockAlign="center">
-                <Text as="h2" variant="headingMd">Getting started checklist</Text>
+                <Text as="h2" variant="headingMd">{t.dashboard.checklist.title}</Text>
                 <Badge tone={completed === steps.length ? "success" : "attention"}>
-                  {`${completed} of ${steps.length} steps completed`}
+                  {t.dashboard.checklist.stepsCompleted(completed, steps.length)}
                 </Badge>
               </InlineStack>
+
+              <div style={{ height: "8px", background: "#EEF0FF", borderRadius: "999px", overflow: "hidden" }}>
+                <div style={{
+                  height: "100%",
+                  width: `${progressPct}%`,
+                  background: "linear-gradient(90deg, #4F46E5, #7C6CF0)",
+                  borderRadius: "999px",
+                  transition: "width 0.4s ease",
+                }} />
+              </div>
+
               <Text as="p" tone="subdued">
-                Complete these steps to finish your setup and start running campaigns.
+                {t.dashboard.checklist.description}
               </Text>
 
               <BlockStack gap="300">
@@ -192,13 +204,26 @@ export default function Index() {
                     padding="400"
                     background="bg-surface-secondary"
                     borderRadius="200"
+                    borderColor={step.done ? "border-success" : "border"}
+                    borderWidth="025"
                   >
                     <InlineStack gap="400" align="space-between" blockAlign="center">
                       <InlineStack gap="300" blockAlign="center">
-                        <Icon
-                          source={step.done ? CheckCircleIcon : InfoIcon}
-                          tone={step.done ? "success" : "subdued"}
-                        />
+                        <div style={{
+                          width: "32px",
+                          height: "32px",
+                          borderRadius: "50%",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: step.done ? "#DCFCE7" : "#EEF0FF",
+                          flexShrink: 0,
+                        }}>
+                          <Icon
+                            source={step.done ? CheckCircleIcon : InfoIcon}
+                            tone={step.done ? "success" : "base"}
+                          />
+                        </div>
                         <BlockStack gap="100">
                           <Text as="h3" variant="headingSm">{step.title}</Text>
                           <Text as="p" tone="subdued">{step.description}</Text>
@@ -216,25 +241,35 @@ export default function Index() {
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
-              <Text as="h2" variant="headingMd">
-                Get started with your first upsell campaign!
-              </Text>
+              <InlineStack gap="300" blockAlign="center">
+                <div style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "10px",
+                  background: "linear-gradient(135deg, #4F46E5, #7C6CF0)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  color: "#fff",
+                }}>
+                  <Icon source={WandIcon} tone="inherit" />
+                </div>
+                <Text as="h2" variant="headingMd">
+                  {t.dashboard.quickStart.title}
+                </Text>
+              </InlineStack>
               <Text as="p" tone="subdued">
-                Create bundles, add-ons, and upsells across cart, checkout, and
-                post-purchase pages — in just a few steps.
+                {t.dashboard.quickStart.description}
               </Text>
               <InlineStack>
-                {/* ✅ Condition: Free plan hai to button disabled karo */}
                 {isFreePlan ? (
                   <Button disabled>
-                    Upgrade to create campaigns
+                    {t.dashboard.quickStart.upgradeCta}
                   </Button>
                 ) : (
-                  <Button
-  url={`/app/campaigns/new`}
-  variant="primary"
->
-                    Create your first campaign
+                  <Button url={`/app/campaigns/new`} variant="primary">
+                    {t.dashboard.quickStart.createCta}
                   </Button>
                 )}
               </InlineStack>
@@ -243,5 +278,56 @@ export default function Index() {
         </Layout.Section>
       </Layout>
     </Page>
+  );
+}
+
+function PageHeader({ title, subtitle, plan, planSuffix }: {
+  title: string;
+  subtitle?: string;
+  plan?: string;
+  planSuffix: string;
+}) {
+  return (
+    <Box paddingBlockEnd="500">
+      <div style={{
+        background: "linear-gradient(135deg, #fafafe 0%, #f3f1ff 100%)",
+        borderRadius: "16px",
+        padding: "28px 32px",
+        border: "1px solid #ede9fe",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "16px",
+        flexWrap: "wrap",
+      }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: "26px", fontWeight: 700, color: "#1a1a2e", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
+            {title}
+          </h1>
+          {subtitle && <p style={{ margin: "6px 0 0", fontSize: "14px", color: "#6B7280" }}>{subtitle}</p>}
+        </div>
+        {plan && <PlanBadge plan={plan} suffix={planSuffix} />}
+      </div>
+    </Box>
+  );
+}
+
+function PlanBadge({ plan, suffix }: { plan: string; suffix: string }) {
+  const cfgs: Record<string, { bg: string; color: string; border: string; dot: string }> = {
+    free:     { bg: "#F9FAFB", color: "#6B7280", border: "#E5E7EB", dot: "#9CA3AF" },
+    basic:    { bg: "#FFFBEB", color: "#B45309", border: "#FDE68A", dot: "#F59E0B" },
+    advanced: { bg: "#EEF2FF", color: "#4338CA", border: "#C7D2FE", dot: "#4F46E5" },
+  };
+  const cfg = cfgs[plan] ?? cfgs.free;
+  return (
+    <div style={{
+      background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`,
+      borderRadius: "999px", padding: "6px 14px 6px 10px",
+      fontSize: "12px", fontWeight: 600, letterSpacing: "0.02em",
+      display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap",
+    }}>
+      <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: cfg.dot, flexShrink: 0 }} />
+      {plan.charAt(0).toUpperCase() + plan.slice(1)} {suffix}
+    </div>
   );
 }

@@ -4,6 +4,18 @@
   data-product-id="{{ product.id }}"
   data-product-handle="{{ product.handle }}"
   data-currency="{{ cart.currency.iso_code }}"
+  data-i18n='{
+    "note": {{ "widget.note" | t | json }},
+    "total": {{ "widget.total" | t | json }},
+    "adding": {{ "widget.adding" | t | json }},
+    "select_at_least_one": {{ "widget.select_at_least_one" | t | json }},
+    "sold_out_option_suffix": {{ "widget.sold_out_option_suffix" | t | json }},
+    "sold_out_items": {{ "widget.sold_out_items" | t | json }},
+    "could_not_add": {{ "widget.could_not_add" | t | json }},
+    "bundle_fallback": {{ "widget.bundle_fallback" | t | json }},
+    "bundle_property_label": {{ "widget.bundle_property_label" | t | json }},
+    "tier_buy_get": {{ "widget.tier_buy_get" | t | json }}
+  }'
   {{ block.shopify_attributes }}
 ></div>
 

@@ -1,0 +1,22 @@
+{
+  "ratings": {
+    "stars": {
+      "label": "Avis"
+    },
+    "home": {
+      "recommendationText": "Produit recommandé !"
+    }
+  },
+  "widget": {
+    "note": "Les articles sélectionnés seront ajoutés au panier.",
+    "total": "Total",
+    "adding": "Ajout en cours...",
+    "select_at_least_one": "Veuillez sélectionner au moins un article.",
+    "sold_out_option_suffix": " — Épuisé",
+    "sold_out_items": "%%items%% épuisé(s).",
+    "could_not_add": "Impossible d'ajouter le lot.",
+    "bundle_fallback": "Lot",
+    "bundle_property_label": "Lot",
+    "tier_buy_get": "Achetez %%min_items%%, obtenez %%value%%"
+  }
+}

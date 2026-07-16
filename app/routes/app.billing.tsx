@@ -15,6 +15,8 @@ import {
   syncSubscriptionStatus,
   isDevStore,
 } from "../billing.server";
+import { useTranslation } from "../i18n/LanguageContext";
+import type { Dictionary } from "../i18n";
 
 /* ── Required by React Router v7 in production ── */
 export function headers() {
@@ -22,11 +24,12 @@ export function headers() {
 }
 
 export function ErrorBoundary() {
+  const { t } = useTranslation();
   return (
     <div style={{ fontFamily: "sans-serif", padding: 40, textAlign: "center" }}>
       <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
       <div style={{ fontSize: 16, fontWeight: 600, color: "#dc2626" }}>
-        Something went wrong on the billing page.
+        {t.billing.errorBoundary}
       </div>
     </div>
   );
@@ -147,30 +150,22 @@ interface PlanDefinition {
   features: string[];
 }
 
-const PLANS: PlanDefinition[] = [
-  {
-    key: "basic",
-    price: 9.99,
-    trial: 7,
-    features: [
-      "Only 5 campaigns",
-      "Analytics dashboard",
-      "Unlimited upsells",
-      "Priority 24/7 support",
-    ],
-  },
-  {
-    key: "advanced",
-    price: 17.99,
-    trial: null,
-    features: [
-      "Unlimited campaigns",
-      "Analytics dashboard",
-      "Unlimited upsells",
-      "Priority 24/7 support",
-    ],
-  },
-];
+function buildPlans(t: Dictionary): PlanDefinition[] {
+  return [
+    {
+      key: "basic",
+      price: 9.99,
+      trial: 7,
+      features: t.billing.basicFeatures,
+    },
+    {
+      key: "advanced",
+      price: 17.99,
+      trial: null,
+      features: t.billing.advancedFeatures,
+    },
+  ];
+}
 
 /* ── Page ── */
 export default function BillingPage() {
@@ -178,6 +173,8 @@ export default function BillingPage() {
   const fetcher = useFetcher<ActionData>();
   const navigation = useNavigation();
   const isLoading = navigation.state !== "idle" || fetcher.state !== "idle";
+  const { t } = useTranslation();
+  const PLANS = buildPlans(t);
 
   const currentPlan: PlanKey = plan ?? "free";
 
@@ -202,7 +199,7 @@ export default function BillingPage() {
   };
 
   const handleCancel = () => {
-    if (!confirm("Cancel your plan? You'll lose access to paid features.")) return;
+    if (!confirm(t.billing.cancelConfirm)) return;
     const fd = new FormData();
     fd.append("actionType", "cancel");
     fetcher.submit(fd, { method: "post" });
@@ -222,10 +219,10 @@ export default function BillingPage() {
     >
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, color: "#0f1623", margin: "0 0 8px" }}>
-          Pricing
+          {t.billing.title}
         </h1>
         <p style={{ fontSize: 13, color: "#6b7280", margin: "0 0 28px" }}>
-          Choose the plan that fits your store.
+          {t.billing.subtitle}
         </p>
 
         {devStore && (
@@ -241,7 +238,7 @@ export default function BillingPage() {
               fontWeight: 600,
             }}
           >
-            🛠️ Development store detected — charges will be created as <strong>test charges</strong> (no real payment).
+            {t.billing.devStoreBanner.prefix} <strong>{t.billing.devStoreBanner.bold}</strong> {t.billing.devStoreBanner.suffix}
           </div>
         )}
 
@@ -275,8 +272,8 @@ export default function BillingPage() {
               fontWeight: 600,
             }}
           >
-            ✅ You are currently on the{" "}
-            <strong>{currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}</strong> plan.
+            {t.billing.currentPlanBanner.prefix}{" "}
+            <strong>{currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}</strong> {t.billing.currentPlanBanner.suffix}
           </div>
         )}
 
@@ -293,14 +290,14 @@ export default function BillingPage() {
             const isCurrent = currentPlan === p.key;
 
             const action: PlanCardAction = isCurrent
-              ? { label: "Cancel Plan", onClick: handleCancel, variant: "outline" }
+              ? { label: t.billing.cancelPlanCta, onClick: handleCancel, variant: "outline" }
               : {
-                  label: p.key === "advanced" ? "Upgrade to Advanced" : "Switch to Basic",
+                  label: p.key === "advanced" ? t.billing.upgradeAdvancedCta : t.billing.switchBasicCta,
                   onClick: () => handleSubscribe(p.key),
                   variant: "primary",
                 };
 
-            const badge = devStore ? "TEST CHARGE" : null;
+            const badge = devStore ? t.billing.testChargeBadge : null;
 
             return (
               <PlanCard
@@ -313,13 +310,14 @@ export default function BillingPage() {
                 badge={badge}
                 action={action}
                 isLoading={isLoading}
+                t={t}
               />
             );
           })}
         </div>
 
         <p style={{ fontSize: 13, color: "#6b7280" }}>
-          All charges are billed in USD. Recurring and usage-based charges are billed every 30 days.
+          {t.billing.footerNote}
         </p>
       </div>
     </div>
@@ -342,6 +340,7 @@ interface PlanCardProps {
   badge: string | null;
   action: PlanCardAction;
   isLoading: boolean;
+  t: Dictionary;
 }
 
 function PlanCard({
@@ -353,6 +352,7 @@ function PlanCard({
   badge,
   action,
   isLoading,
+  t,
 }: PlanCardProps) {
   return (
     <div
@@ -383,7 +383,7 @@ function PlanCard({
             letterSpacing: ".04em",
           }}
         >
-          CURRENT PLAN
+          {t.billing.currentPlanBadge}
         </span>
       )}
       {badge && (
@@ -408,7 +408,7 @@ function PlanCard({
       <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 4 }}>{name}</div>
       <div style={{ fontSize: 36, fontWeight: 800, color: "#0f1623", lineHeight: 1.1 }}>
         ${price.toFixed(2)}
-        <span style={{ fontSize: 14, fontWeight: 500, color: "#6b7280" }}> / month</span>
+        <span style={{ fontSize: 14, fontWeight: 500, color: "#6b7280" }}>{t.billing.perMonth}</span>
       </div>
 
       {trial ? (
@@ -421,14 +421,14 @@ function PlanCard({
             marginBottom: 20,
           }}
         >
-          🎉 {trial}-day free trial
+          {t.billing.trialText(trial)}
         </div>
       ) : (
         <div style={{ marginBottom: 24 }} />
       )}
 
       <div style={{ fontSize: 13, fontWeight: 700, color: "#0f1623", marginBottom: 10 }}>
-        Features
+        {t.billing.featuresLabel}
       </div>
       <ul
         style={{
@@ -476,7 +476,7 @@ function PlanCard({
           opacity: isLoading ? 0.6 : 1,
         }}
       >
-        {isLoading ? "Please wait…" : action.label}
+        {isLoading ? t.billing.pleaseWait : action.label}
       </button>
     </div>
   );

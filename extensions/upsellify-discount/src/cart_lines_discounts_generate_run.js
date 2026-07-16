@@ -8,6 +8,20 @@ import {
  * @typedef {import("../generated/api").CartLinesDiscountsGenerateRunResult} CartLinesDiscountsGenerateRunResult
  */
 
+const BUNDLE_OFF_MESSAGES = {
+  en: (value, suffix) => `Bundle: ${value}${suffix} off`,
+  de: (value, suffix) => `Bundle: ${value}${suffix} Rabatt`,
+  es: (value, suffix) => `Paquete: ${value}${suffix} de descuento`,
+  fr: (value, suffix) => `Lot : ${value}${suffix} de réduction`,
+  it: (value, suffix) => `Bundle: ${value}${suffix} di sconto`,
+};
+
+function bundleOffMessage(value, isPercentage, language) {
+  const locale = (language || "en").toLowerCase();
+  const build = BUNDLE_OFF_MESSAGES[locale] || BUNDLE_OFF_MESSAGES.en;
+  return build(value, isPercentage ? "%" : "");
+}
+
 /**
  * @param {RunInput} input
  * @returns {CartLinesDiscountsGenerateRunResult}
@@ -15,6 +29,8 @@ import {
 export function cartLinesDiscountsGenerateRun(input) {
   const EMPTY = { operations: [] };
   if (!input.cart.lines.length) return EMPTY;
+
+  const language = input.localization?.language?.isoCode;
 
   const hasProductDiscountClass = input.discount.discountClasses.includes(
     DiscountClass.Product,
@@ -83,7 +99,7 @@ for (const campaign of config.campaigns) {
       : { fixedAmount: { amount: tier.value } };
 
     candidates.push({
-      message: `Bundle: ${tier.value}${tier.valueType === "PERCENTAGE" ? "%" : ""} off`,
+      message: bundleOffMessage(tier.value, tier.valueType === "PERCENTAGE", language),
       targets: bundleLines.map((l) => ({ cartLine: { id: l.id } })),
       value,
     });

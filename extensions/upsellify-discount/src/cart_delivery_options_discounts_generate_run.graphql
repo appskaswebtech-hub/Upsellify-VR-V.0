@@ -1,4 +1,9 @@
 query DeliveryInput {
+  localization {
+    language {
+      isoCode
+    }
+  }
   cart {
     deliveryGroups {
       id

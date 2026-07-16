@@ -22,7 +22,31 @@
     mountEl: null,
     currentTierIdx: 0,
     layoutType: "FBT_LIST",
+    i18n: null,
   };
+
+  const DEFAULT_I18N = {
+    note: "Selected items will be added to cart.",
+    total: "Total",
+    adding: "Adding...",
+    select_at_least_one: "Please select at least one item.",
+    sold_out_option_suffix: " — Sold out",
+    sold_out_items: "%%items%% sold out.",
+    could_not_add: "Could not add the bundle.",
+    bundle_fallback: "Bundle",
+    bundle_property_label: "Bundle",
+    tier_buy_get: "Buy %%min_items%%, get %%value%%",
+  };
+
+  function readI18n(el) {
+    let parsed = {};
+    try {
+      parsed = JSON.parse(el.dataset.i18n || "{}");
+    } catch (e) {
+      // fall back to defaults if the theme hasn't re-rendered the block yet
+    }
+    return { ...DEFAULT_I18N, ...parsed };
+  }
 
   const money = (cents, currency) =>
     new Intl.NumberFormat(document.documentElement.lang || "en", {
@@ -93,6 +117,7 @@
       if (target?.parentNode) target.parentNode.insertBefore(embed, target.nextSibling);
     } else return;
 
+    state.i18n = readI18n(state.mountEl);
     applyAppearance();
     render();
   }
@@ -119,7 +144,7 @@
         ${renderTierTabs()}
         <div data-role="body"></div>
         <div class="sl-fbt__total" data-role="total"></div>
-        <p class="sl-fbt__note">Selected items will be added to cart.</p>
+        <p class="sl-fbt__note">${escapeHtml(state.i18n.note)}</p>
         <div class="sl-fbt__error" data-role="error" hidden></div>
         <button class="sl-fbt__cta" type="button" data-role="cta">${escapeHtml(c.ctaLabel)}</button>
       </div>
@@ -137,7 +162,9 @@
       <div class="sl-fbt__tiers">
         ${d.tiers.map((t, i) => `
           <button class="sl-fbt__tier ${i === state.currentTierIdx ? "is-active" : ""}" data-tier="${i}" type="button">
-            ${escapeHtml(t.label || `Buy ${t.minItems}, get ${t.value}${t.valueType === "PERCENTAGE" ? "%" : ""}`)}
+            ${escapeHtml(t.label || state.i18n.tier_buy_get
+              .replace("%%min_items%%", t.minItems)
+              .replace("%%value%%", `${t.value}${t.valueType === "PERCENTAGE" ? "%" : ""}`))}
           </button>
         `).join("")}
       </div>
@@ -311,7 +338,7 @@
   function renderVariantSelect(product, selectedId, isTrigger, offerIdx) {
     if (!product.variants || product.variants.length <= 1) return "";
     const opts = product.variants.map((v) =>
-      `<option value="${v.id}" ${v.id === selectedId ? "selected" : ""}>${escapeHtml(v.title)}${v.available ? "" : " — Sold out"}</option>`,
+      `<option value="${v.id}" ${v.id === selectedId ? "selected" : ""}>${escapeHtml(v.title)}${v.available ? "" : escapeHtml(state.i18n.sold_out_option_suffix)}</option>`,
     ).join("");
     return `<select class="sl-fbt__variant" data-role="variant" data-trigger="${isTrigger}" data-idx="${offerIdx ?? ""}">${opts}</select>`;
   }
@@ -352,7 +379,7 @@
 
     el.innerHTML = `
       <div class="sl-fbt__total-row">
-        <span class="sl-fbt__total-label">Total</span>
+        <span class="sl-fbt__total-label">${escapeHtml(state.i18n.total)}</span>
         <span>
           ${discountAmt > 0 ? `<span class="sl-fbt__compare">${money(subtotal, state.currency)}</span> <span class="sl-fbt__discount-tag">${discountLabel}</span>` : ""}
           <span class="sl-fbt__total-val">${money(total, state.currency)}</span>
@@ -470,18 +497,19 @@
     errEl.hidden = true;
     const original = btn.textContent;
     btn.disabled = true;
-    btn.textContent = "Adding...";
+    btn.textContent = state.i18n.adding;
 
     try {
       const items = buildCartItems();
-      if (!items.length) throw new Error("Please select at least one item.");
+      if (!items.length) throw new Error(state.i18n.select_at_least_one);
       const unavail = items.filter((i) => !i.available);
       if (unavail.length) {
-        throw new Error(`${unavail.map((u) => `"${u.title}"`).join(", ")} sold out.`);
+        const itemsStr = unavail.map((u) => `"${u.title}"`).join(", ");
+        throw new Error(state.i18n.sold_out_items.replace("%%items%%", itemsStr));
       }
 
       const bundleId = `bundle_${state.campaign.id}_${Date.now()}`;
-      const campaignName = state.campaign.title || "Bundle";
+      const campaignName = state.campaign.title || state.i18n.bundle_fallback;
 
       // Detect which sections the theme uses
       const sectionsToRender = [];
@@ -501,7 +529,7 @@
             "_bundle_id": bundleId,
             "_bundle_campaign_id": state.campaign.id,
             "_bundle_role": index === 0 ? "trigger" : "offer",
-            "Bundle": campaignName,
+            [state.i18n.bundle_property_label]: campaignName,
           },
         })),
       };
@@ -538,7 +566,7 @@
       btn.textContent = original;
     } catch (e) {
       console.error("[selleasy]", e);
-      errEl.textContent = e.message || "Could not add the bundle.";
+      errEl.textContent = e.message || state.i18n.could_not_add;
       errEl.hidden = false;
       btn.disabled = false;
       btn.textContent = original;

@@ -31,7 +31,7 @@ export const PLAN_CONFIG: Record<Exclude<PlanKey, "free">, PlanConfig> = {
   },
   advanced: {
     name: "ADVANCED PLAN",    // ← Partner dashboard display name
-    amount: 9.99,
+    amount: 17.99,
     currencyCode: "USD",
     interval: "EVERY_30_DAYS",
     trialDays: 0,
@@ -116,7 +116,7 @@ export async function createSubscription(
       },
     ],
     trialDays: config.trialDays > 0 ? config.trialDays : null,
-    test: process.env.NODE_ENV !== "production",
+    test: false,
   };
 
   const response = await admin.graphql(mutation, { variables });

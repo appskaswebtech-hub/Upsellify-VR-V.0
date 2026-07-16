@@ -13,6 +13,14 @@ import {
   * @returns {CartDeliveryOptionsDiscountsGenerateRunResult}
   */
 
+const FREE_DELIVERY_MESSAGES = {
+  en: "FREE DELIVERY",
+  de: "KOSTENLOSER VERSAND",
+  es: "ENVÍO GRATIS",
+  fr: "LIVRAISON GRATUITE",
+  it: "SPEDIZIONE GRATUITA",
+};
+
 export function cartDeliveryOptionsDiscountsGenerateRun(input) {
   const firstDeliveryGroup = input.cart.deliveryGroups[0];
   if (!firstDeliveryGroup) {
@@ -27,13 +35,16 @@ export function cartDeliveryOptionsDiscountsGenerateRun(input) {
     return {operations: []};
   }
 
+  const language = (input.localization?.language?.isoCode || "en").toLowerCase();
+  const message = FREE_DELIVERY_MESSAGES[language] || FREE_DELIVERY_MESSAGES.en;
+
   return {
     operations: [
       {
         deliveryDiscountsAdd: {
           candidates: [
             {
-              message: "FREE DELIVERY",
+              message,
               targets: [
                 {
                   deliveryGroup: {
