@@ -323,6 +323,7 @@ export const de: Dictionary = {
     cancelPlanCta: "Tarif kündigen",
     upgradeAdvancedCta: "Auf Advanced upgraden",
     switchBasicCta: "Zu Basic wechseln",
+    downgradeCta: "Auf Kostenlos herabstufen",
     testChargeBadge: "TESTGEBÜHR",
     currentPlanBadge: "AKTUELLER TARIF",
     perMonth: " / Monat",

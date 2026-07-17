@@ -13,7 +13,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const host = url.searchParams.get("host");
 
   if (!plan || !(plan in PLAN_MAP)) {
-    return redirect("/app/plans");
+    return redirect("/app/billing");
   }
 
   const { billing, session } = await authenticate.admin(request);

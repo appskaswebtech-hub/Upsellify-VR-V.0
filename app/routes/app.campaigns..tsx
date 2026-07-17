@@ -733,7 +733,7 @@ export default function CampaignEditor() {
               </Text>
 
               {plan === "free" ? (
-                <Button url="/app/plans" variant="plain" icon={LockIcon}>
+                <Button url="/app/billing" variant="plain" icon={LockIcon}>
                   Upgrade to customize widget
                 </Button>
               ) : (

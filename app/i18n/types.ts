@@ -277,6 +277,7 @@ export interface Dictionary {
     cancelPlanCta: string;
     upgradeAdvancedCta: string;
     switchBasicCta: string;
+    downgradeCta: string;
     testChargeBadge: string;
     currentPlanBadge: string;
     perMonth: string;

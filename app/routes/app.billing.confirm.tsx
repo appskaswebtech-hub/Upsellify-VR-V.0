@@ -20,7 +20,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // ❌ No active payment
   if (!billingCheck.hasActivePayment) {
-    return redirect("/app/plans");
+    return redirect("/app/billing");
   }
 
   // ✅ Get active subscriptions

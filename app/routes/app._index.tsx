@@ -135,7 +135,7 @@ export default function Index() {
             </div>
           </InlineStack>
           <Button
-            url={`/app/plans?shop=${shopDomain}&host=${host}`}
+            url={`/app/billing?shop=${shopDomain}&host=${host}`}
             variant="primary"
           >
             {t.dashboard.freePlanBanner.cta}
@@ -163,7 +163,7 @@ export default function Index() {
             </div>
           </InlineStack>
           <Button
-            url={`/app/plans?shop=${shopDomain}&host=${host}`}
+            url={`/app/billing?shop=${shopDomain}&host=${host}`}
             variant="primary"
           >
             {t.dashboard.basicPlanBanner.cta}

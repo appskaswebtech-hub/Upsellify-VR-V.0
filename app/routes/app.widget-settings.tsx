@@ -90,7 +90,7 @@ export default function WidgetSettings() {
         open={isModalOpen}
         onClose={() => setShowUpgradeModal(false)}
         title={t.widgetSettings.upgradeModal.title}
-        primaryAction={{ content: t.widgetSettings.upgradeModal.viewPlansCta, onAction: () => navigate("/app/plans?reason=customize") }}
+        primaryAction={{ content: t.widgetSettings.upgradeModal.viewPlansCta, onAction: () => navigate("/app/billing") }}
         secondaryActions={[{ content: t.widgetSettings.upgradeModal.maybeLater, onAction: () => setShowUpgradeModal(false) }]}
       >
         <Modal.Section>
@@ -117,7 +117,7 @@ export default function WidgetSettings() {
       {actionData?.ok && <Box paddingBlockEnd="400"><Banner tone="success" title={t.widgetSettings.savedBanner} /></Box>}
       {plan === "free" && (
         <Box paddingBlockEnd="400">
-          <Banner tone="info" title={t.widgetSettings.freePlanBanner.title} action={{ content: t.widgetSettings.freePlanBanner.cta, url: "/app/plans" }} />
+          <Banner tone="info" title={t.widgetSettings.freePlanBanner.title} action={{ content: t.widgetSettings.freePlanBanner.cta, url: "/app/billing" }} />
         </Box>
       )}
 

@@ -323,6 +323,7 @@ export const it: Dictionary = {
     cancelPlanCta: "Annulla piano",
     upgradeAdvancedCta: "Esegui l'upgrade ad Advanced",
     switchBasicCta: "Passa a Basic",
+    downgradeCta: "Passa al piano Gratuito",
     testChargeBadge: "ADDEBITO DI PROVA",
     currentPlanBadge: "PIANO ATTUALE",
     perMonth: " / mese",
