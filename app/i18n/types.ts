@@ -236,8 +236,15 @@ export interface Dictionary {
     whatsIncluded: string;
     activePlanCta: string;
     startTrialCta: string;
+    manageCta: string;
     noCreditCard: string;
     trustRow: string[];
+    free: {
+      name: string;
+      tagline: string;
+      description: string;
+      features: string[];
+    };
     basic: {
       name: string;
       tagline: string;

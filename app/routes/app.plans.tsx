@@ -20,6 +20,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
 function buildPlans(t: Dictionary) {
   return [
     {
+      name: t.plans.free.name,
+      price: "$0",
+      tagline: t.plans.free.tagline,
+      description: t.plans.free.description,
+      features: [
+        { text: t.plans.free.features[0], highlight: false },
+        { text: t.plans.free.features[1], highlight: false },
+        { text: t.plans.free.features[2], highlight: false },
+        { text: t.plans.free.features[3], highlight: false },
+        { text: t.plans.free.features[4], highlight: false },
+      ],
+      planKey: "free",
+      recommended: false,
+      trialText: "",
+    },
+    {
       name: t.plans.basic.name,
       price: "$9.99",
       tagline: t.plans.basic.tagline,
@@ -100,9 +116,9 @@ export default function PlansPage() {
       {/* Cards */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-        gap: "24px",
-        maxWidth: "800px",
+        gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+        gap: "20px",
+        maxWidth: "1080px",
         margin: "0 auto 48px",
       }}>
         {PLANS.map((plan) => {
@@ -173,19 +189,21 @@ export default function PlansPage() {
                 </div>
 
                 {/* Trial badge */}
-                <div style={{ marginBottom: "20px" }}>
-                  <span style={{
-                    display: "inline-flex", alignItems: "center", gap: "5px",
-                    fontSize: "12px", fontWeight: 600, padding: "3px 10px", borderRadius: "100px",
-                    ...(isDark
-                      ? { color: "#4ade80", background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.25)" }
-                      : { color: "#22c55e", background: "#f0fdf4", border: "1px solid #bbf7d0" }),
-                  }}>
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                      <path d="M2 5l2 2.5L8 2.5" stroke={isDark ? "#4ade80" : "#22c55e"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    {plan.trialText} {t.plans.trialSuffix}
-                  </span>
+                <div style={{ marginBottom: "20px", minHeight: plan.trialText ? undefined : "0" }}>
+                  {plan.trialText && (
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: "5px",
+                      fontSize: "12px", fontWeight: 600, padding: "3px 10px", borderRadius: "100px",
+                      ...(isDark
+                        ? { color: "#4ade80", background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.25)" }
+                        : { color: "#22c55e", background: "#f0fdf4", border: "1px solid #bbf7d0" }),
+                    }}>
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                        <path d="M2 5l2 2.5L8 2.5" stroke={isDark ? "#4ade80" : "#22c55e"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      {plan.trialText} {t.plans.trialSuffix}
+                    </span>
+                  )}
                 </div>
 
                 <p style={{ fontSize: "13.5px", lineHeight: 1.6, margin: "0 0 20px", color: isDark ? "rgba(255,255,255,0.7)" : "#6b7280" }}>
@@ -233,6 +251,20 @@ export default function PlansPage() {
                       : { background: "#f9fafb", color: "#9ca3af", border: "1.5px solid #e5e7eb" }),
                   }}>
                     {t.plans.activePlanCta}
+                  </button>
+                ) : plan.planKey === "free" ? (
+                  <button
+                    onClick={() => navigate("/app/billing")}
+                    style={{
+                      width: "100%", padding: "13px 24px", borderRadius: "12px",
+                      fontSize: "14.5px", fontWeight: 700, cursor: "pointer",
+                      transition: "all 0.2s ease",
+                      ...(isDark
+                        ? { background: "rgba(255,255,255,0.1)", color: "#ffffff", border: "1.5px solid rgba(255,255,255,0.3)" }
+                        : { background: "#fff", color: "#1a1f6e", border: "1.5px solid #c5cdf8" }),
+                    }}
+                  >
+                    {t.plans.manageCta}
                   </button>
                 ) : (
                   <button

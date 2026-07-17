@@ -264,8 +264,21 @@ export const fr: Dictionary = {
     whatsIncluded: "Ce qui est inclus",
     activePlanCta: "Forfait actif",
     startTrialCta: "Démarrer l'essai gratuit",
+    manageCta: "Gérer le forfait",
     noCreditCard: "Aucune carte bancaire requise",
     trustRow: ["Facturation sécurisée via Shopify", "Annulez à tout moment", "Équipe de support sympathique"],
+    free: {
+      name: "Gratuit",
+      tagline: "Démarrez sans frais",
+      description: "Idéal pour essayer Upsellify avant de passer à un forfait supérieur.",
+      features: [
+        "1 campagne active",
+        "Ventes incitatives sur la page produit",
+        "Ventes incitatives dans le panier",
+        "Tableau de bord analytique",
+        "Style de widget personnalisé",
+      ],
+    },
     basic: {
       name: "Basic",
       tagline: "Boostez vos revenus dès aujourd'hui",

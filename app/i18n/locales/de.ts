@@ -264,8 +264,21 @@ export const de: Dictionary = {
     whatsIncluded: "Was ist enthalten",
     activePlanCta: "Aktiver Tarif",
     startTrialCta: "Kostenlose Testphase starten",
+    manageCta: "Tarif verwalten",
     noCreditCard: "Keine Kreditkarte erforderlich",
     trustRow: ["Sichere Abrechnung über Shopify", "Jederzeit kündbar", "Freundliches Support-Team"],
+    free: {
+      name: "Kostenlos",
+      tagline: "Kostenlos loslegen",
+      description: "Perfekt, um Upsellify vor dem Upgrade auszuprobieren.",
+      features: [
+        "1 aktive Kampagne",
+        "Upsells auf der Produktseite",
+        "Warenkorb-Upsells",
+        "Analyse-Dashboard",
+        "Individuelles Widget-Styling",
+      ],
+    },
     basic: {
       name: "Basic",
       tagline: "Steigern Sie noch heute Ihren Umsatz",
