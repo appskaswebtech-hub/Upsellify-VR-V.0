@@ -92,6 +92,7 @@ model Campaign {
   randomizeOffers       Boolean @default(false)
   limitOffersShown      Int?
   autoMatchVariants     Boolean @default(false)
+  cartOfferLayout       String  @default("HORIZONTAL") // HORIZONTAL | VERTICAL — cart-drawer offer strip layout
 
   triggers      CampaignTrigger[]
   offers        CampaignOffer[]

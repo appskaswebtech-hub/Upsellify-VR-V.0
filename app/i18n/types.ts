@@ -143,6 +143,12 @@ export interface Dictionary {
       autoMatchVariants: string;
       autoMatchVariantsHelp: string;
     };
+    cartLayout: {
+      sectionTitle: string;
+      description: string;
+      horizontal: string;
+      vertical: string;
+    };
     discounts: {
       sectionTitle: string;
       typeLabel: string;

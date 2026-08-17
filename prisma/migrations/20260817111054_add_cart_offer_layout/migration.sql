@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `campaign` ADD COLUMN `cartOfferLayout` VARCHAR(191) NOT NULL DEFAULT 'HORIZONTAL';

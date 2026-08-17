@@ -152,6 +152,12 @@ export const fr: Dictionary = {
       autoMatchVariants: "Associer automatiquement les variantes des produits de l'offre au produit déclencheur",
       autoMatchVariantsHelp: "L'association de variantes se basera sur le nom de la variante.",
     },
+    cartLayout: {
+      sectionTitle: "Disposition du tiroir de panier",
+      description: "Choisissez comment les produits proposés s'affichent dans le tiroir de panier.",
+      horizontal: "Horizontal",
+      vertical: "Vertical",
+    },
     discounts: {
       sectionTitle: "Réductions",
       typeLabel: "Type",

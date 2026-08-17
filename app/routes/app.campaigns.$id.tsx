@@ -112,6 +112,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           randomizeOffers: data.settings.randomizeOffers,
           limitOffersShown: data.settings.limitOffersShown,
           autoMatchVariants: data.settings.autoMatchVariants,
+          cartOfferLayout: data.settings.cartOfferLayout,
         },
       });
 
@@ -271,6 +272,8 @@ export default function CampaignEditor() {
   const [limitEnabled, setLimitEnabled] = useState(campaign.limitOffersShown != null);
   const [limitValue, setLimitValue] = useState(String(campaign.limitOffersShown ?? 3));
   const [autoMatchVariants, setAutoMatchVariants] = useState(campaign.autoMatchVariants);
+  const [cartOfferLayout, setCartOfferLayout] = useState(campaign.cartOfferLayout);
+  const isCartDrawer = campaign.placement === "CART_DRAWER";
 
   const [discountType, setDiscountType] = useState<"NONE" | "PERCENTAGE" | "FIXED" | "TIERED">(
     (campaign.discount?.type as any) || "NONE",
@@ -344,6 +347,7 @@ export default function CampaignEditor() {
         randomizeOffers,
         limitOffersShown: limitEnabled ? Number(limitValue) : null,
         autoMatchVariants,
+        cartOfferLayout,
       },
       discount: {
         type: discountType,
@@ -544,6 +548,31 @@ export default function CampaignEditor() {
                 />
               </BlockStack>
             </Card>
+
+            {isCartDrawer && (
+              <Card>
+                <BlockStack gap="300">
+                  <SectionTitle icon={PaintBrushFlatIcon} color="#0891B2">{t.campaignDetail.cartLayout.sectionTitle}</SectionTitle>
+                  <Text as="p" tone="subdued">
+                    {t.campaignDetail.cartLayout.description}
+                  </Text>
+                  <InlineStack gap="300" wrap={false}>
+                    <LayoutOption
+                      selected={cartOfferLayout === "HORIZONTAL"}
+                      onSelect={() => setCartOfferLayout("HORIZONTAL")}
+                      label={t.campaignDetail.cartLayout.horizontal}
+                      preview={<HorizontalPreview />}
+                    />
+                    <LayoutOption
+                      selected={cartOfferLayout === "VERTICAL"}
+                      onSelect={() => setCartOfferLayout("VERTICAL")}
+                      label={t.campaignDetail.cartLayout.vertical}
+                      preview={<VerticalPreview />}
+                    />
+                  </InlineStack>
+                </BlockStack>
+              </Card>
+            )}
 
             <Card>
               <BlockStack gap="300">
@@ -808,6 +837,80 @@ function ResourceList({
         </Box>
       ))}
     </BlockStack>
+  );
+}
+
+function LayoutOption({
+  selected, onSelect, label, preview,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  label: string;
+  preview: ReactNode;
+}) {
+  return (
+    <Box
+      padding="300"
+      background={selected ? "bg-surface-selected" : "bg-surface-secondary"}
+      borderRadius="200"
+      borderWidth="025"
+      borderColor={selected ? "border-emphasis" : "border"}
+      minWidth="140px"
+    >
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onSelect}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
+        style={{ cursor: "pointer", display: "flex", flexDirection: "column", gap: "8px", alignItems: "center" }}
+      >
+        {preview}
+        <Text as="span" variant="bodySm" fontWeight={selected ? "semibold" : "regular"}>
+          {label}
+        </Text>
+      </div>
+    </Box>
+  );
+}
+
+// Miniature mock-ups so merchants can see the difference before picking —
+// deliberately built from plain divs (not real widget markup) to stay cheap
+// and stable regardless of the live widget's CSS.
+function HorizontalPreview() {
+  const card = (
+    <div style={{
+      width: "26px", height: "34px", borderRadius: "4px",
+      background: "#fff", border: "1px solid #dcdcdc",
+      display: "flex", flexDirection: "column", gap: "2px", padding: "2px",
+    }}>
+      <div style={{ width: "100%", flex: 1, borderRadius: "2px", background: "#e4e4e7" }} />
+      <div style={{ width: "80%", height: "3px", borderRadius: "1px", background: "#d4d4d8" }} />
+      <div style={{ width: "100%", height: "5px", borderRadius: "2px", background: "#4F46E5" }} />
+    </div>
+  );
+  return (
+    <div style={{ display: "flex", gap: "4px", padding: "8px", background: "#f4f4f5", borderRadius: "6px" }}>
+      {card}{card}{card}
+    </div>
+  );
+}
+
+function VerticalPreview() {
+  const row = (
+    <div style={{
+      width: "70px", height: "18px", borderRadius: "4px",
+      background: "#fff", border: "1px solid #dcdcdc",
+      display: "flex", alignItems: "center", gap: "4px", padding: "0 4px",
+    }}>
+      <div style={{ width: "12px", height: "12px", borderRadius: "3px", background: "#e4e4e7", flexShrink: 0 }} />
+      <div style={{ flex: 1, height: "3px", borderRadius: "1px", background: "#d4d4d8" }} />
+      <div style={{ width: "14px", height: "8px", borderRadius: "5px", background: "#4F46E5", flexShrink: 0 }} />
+    </div>
+  );
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "3px", padding: "8px", background: "#f4f4f5", borderRadius: "6px" }}>
+      {row}{row}{row}
+    </div>
   );
 }
 

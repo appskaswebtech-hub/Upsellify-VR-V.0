@@ -152,6 +152,12 @@ export const it: Dictionary = {
       autoMatchVariants: "Abbina automaticamente le varianti dei prodotti in offerta al prodotto trigger",
       autoMatchVariantsHelp: "L'abbinamento delle varianti verrà tentato in base al nome della variante.",
     },
+    cartLayout: {
+      sectionTitle: "Layout del cassetto carrello",
+      description: "Scegli come vengono mostrati i prodotti in offerta nel cassetto carrello.",
+      horizontal: "Orizzontale",
+      vertical: "Verticale",
+    },
     discounts: {
       sectionTitle: "Sconti",
       typeLabel: "Tipo",

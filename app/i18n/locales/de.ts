@@ -152,6 +152,12 @@ export const de: Dictionary = {
       autoMatchVariants: "Varianten der Angebotsprodukte automatisch mit dem Auslöserprodukt abgleichen",
       autoMatchVariantsHelp: "Der Variantenabgleich erfolgt anhand des Variantennamens.",
     },
+    cartLayout: {
+      sectionTitle: "Layout der Warenkorb-Schublade",
+      description: "Wählen Sie, wie Angebotsprodukte in der Warenkorb-Schublade angezeigt werden.",
+      horizontal: "Horizontal",
+      vertical: "Vertikal",
+    },
     discounts: {
       sectionTitle: "Rabatte",
       typeLabel: "Typ",

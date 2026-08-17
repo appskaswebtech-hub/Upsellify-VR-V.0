@@ -152,6 +152,12 @@ export const en: Dictionary = {
       autoMatchVariants: "Automatically match offer product variants with the trigger product",
       autoMatchVariantsHelp: "Variant match will be attempted based on the variant name.",
     },
+    cartLayout: {
+      sectionTitle: "Cart drawer layout",
+      description: "Choose how offer products are displayed in the cart drawer.",
+      horizontal: "Horizontal",
+      vertical: "Vertical",
+    },
     discounts: {
       sectionTitle: "Discounts",
       typeLabel: "Type",

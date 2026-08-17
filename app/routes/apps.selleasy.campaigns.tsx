@@ -3,9 +3,45 @@ import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 
+// Shopify's auth/admin helpers throw bare Response objects on failure, which
+// print as an opaque shell with no message via console.error — unwrap them
+// into something readable for debug logging.
+async function stringifyError(e: unknown): Promise<string> {
+  if (e instanceof Response) {
+    const body = await e.text().catch(() => "<unreadable body>");
+    return `Response ${e.status} ${e.statusText} body: ${body || "<empty>"}`;
+  }
+  if (e instanceof Error) {
+    return `${e.name}: ${e.message}\n${e.stack ?? ""}`;
+  }
+  return String(e);
+}
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  let session, admin;
   try {
-  const { session, admin } = await authenticate.public.appProxy(request);
+    ({ session, admin } = await authenticate.public.appProxy(request));
+  } catch (e) {
+    const failedShop = new URL(request.url).searchParams.get("shop") ?? "<unknown>";
+    console.error("[selleasy proxy error] STAGE=authenticate.appProxy shop:", failedShop, await stringifyError(e));
+    // Auto-diagnose instead of requiring a manual DB check every time this
+    // is reported: dump this shop's session rows right into the same log.
+    try {
+      const rows = await db.session.findMany({ where: { shop: failedShop } });
+      console.error(
+        "[selleasy proxy error] session rows for",
+        failedShop,
+        JSON.stringify(
+          rows.map((r) => ({ id: r.id, isOnline: r.isOnline, expires: r.expires, accessToken: r.accessToken ? "<present>" : "<missing>" })),
+        ),
+      );
+    } catch (dbErr) {
+      console.error("[selleasy proxy error] session lookup itself failed:", await stringifyError(dbErr));
+    }
+    return json({ campaigns: [] });
+  }
+
+  try {
   if (!session) return json({ campaigns: [] });
 
   const url = new URL(request.url);
@@ -17,11 +53,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const shopRow = await db.shop.findUnique({ where: { shop: session.shop } });
 
+  // The product-page widget script (upsellify-widget.js) renders both inline
+  // FBT layouts (placement "PRODUCT_PAGE") and the Add-to-Cart popup layouts
+  // (placement "ATC_POPUP", set by getPlacementForType in
+  // app.campaigns.new.$type.tsx) — same script, same product page, it just
+  // decides inline-vs-popup from the campaign's type client-side. So the
+  // default query (no explicit ?placement=) must match both; only an
+  // explicit ?placement= (e.g. from the cart-drawer/post-purchase widgets)
+  // narrows it to one.
+  const placementParam = url.searchParams.get("placement");
+  const placementFilter = placementParam
+    ? placementParam
+    : { in: ["PRODUCT_PAGE", "ATC_POPUP"] };
+
   const candidates = await db.campaign.findMany({
     where: {
       shop: session.shop,
       status: "ACTIVE",
-      placement: url.searchParams.get("placement") || "PRODUCT_PAGE",
+      placement: placementFilter,
       deletedAt: null,
       AND: [
         { OR: [{ startDate: null }, { startDate: { lte: now } }] },
@@ -106,6 +155,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       allowDeselectTrigger: winner.allowDeselectTrigger,
       doNotPreselect: winner.doNotPreselect,
       autoMatchVariants: winner.autoMatchVariants,
+      cartOfferLayout: winner.cartOfferLayout,
     },
     appearance: {
       accentColor: shopRow?.widgetAccentColor || "#4F46E5",
@@ -138,7 +188,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     { headers: { "Cache-Control": "private, max-age=30" } },
   );
   } catch (e) {
-    console.error("[selleasy proxy error]", e);
+    console.error("[selleasy proxy error] STAGE=body", await stringifyError(e));
     return json({ campaigns: [] });
   }
 };

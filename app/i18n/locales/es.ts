@@ -152,6 +152,12 @@ export const es: Dictionary = {
       autoMatchVariants: "Emparejar automáticamente las variantes de los productos de oferta con el producto disparador",
       autoMatchVariantsHelp: "El emparejamiento de variantes se intentará según el nombre de la variante.",
     },
+    cartLayout: {
+      sectionTitle: "Diseño del cajón del carrito",
+      description: "Elige cómo se muestran los productos ofertados en el cajón del carrito.",
+      horizontal: "Horizontal",
+      vertical: "Vertical",
+    },
     discounts: {
       sectionTitle: "Descuentos",
       typeLabel: "Tipo",
