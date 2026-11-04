@@ -34,13 +34,15 @@ export async function syncShopifyDiscount({
       .map((c) => {
         if (!c.discount || c.discount.type === "NONE") return null;
 
-        const productIds = Array.from(
-          new Set([
-            ...c.triggers
+        const triggerProductIds = Array.from(
+          new Set(
+            c.triggers
               .filter((t) => t.resourceType === "product")
               .map((t) => t.resourceId),
-            ...c.offers.map((o) => o.productId),
-          ]),
+          ),
+        );
+        const productIds = Array.from(
+          new Set([...triggerProductIds, ...c.offers.map((o) => o.productId)]),
         );
         if (productIds.length === 0) return null;
 
@@ -58,7 +60,14 @@ export async function syncShopifyDiscount({
         }
         if (tiers.length === 0) return null;
 
-        return { campaignId: c.id, campaignType: c.type, triggerType: c.triggerType, productIds, tiers };
+        return {
+          campaignId: c.id,
+          campaignType: c.type,
+          triggerType: c.triggerType,
+          productIds,
+          triggerProductIds,
+          tiers,
+        };
       })
       .filter(Boolean),
   };

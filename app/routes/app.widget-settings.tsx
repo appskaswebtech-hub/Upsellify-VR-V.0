@@ -93,7 +93,7 @@ export default function WidgetSettings() {
         primaryAction={{ content: t.widgetSettings.upgradeModal.viewPlansCta, onAction: () => navigate("/app/billing") }}
         secondaryActions={[{ content: t.widgetSettings.upgradeModal.maybeLater, onAction: () => setShowUpgradeModal(false) }]}
       >
-        <Modal.Section>
+        <Modal.Section>   
           <BlockStack gap="400">
             <div style={{ background: "linear-gradient(135deg, #1a1f6e, #4f6af0)", borderRadius: "12px", padding: "24px", textAlign: "center" }}>
               <div style={{ fontSize: "36px", marginBottom: "10px" }}>🎨</div>
@@ -187,4 +187,3 @@ export default function WidgetSettings() {
     </Page>
   );
 }
-

@@ -17,7 +17,7 @@ export const en: Dictionary = {
     loading: "Loading...",
   },
   nav: {
-    dashboard: "Dashboard",
+    dashboard: "Homepage",
     campaigns: "Campaigns",
     customize: "Customize",
     plans: "Plans",
@@ -26,13 +26,13 @@ export const en: Dictionary = {
     specialOffer: "Special offer",
   },
   dashboard: {
-    title: "Dashboard",
-    subtitle: "Welcome back — here's your upsell overview.",
+    title: "Homepage",
+    subtitle: "Every order is a chance to sell more — here's how yours are performing.",
     planSuffix: "Plan",
     freePlanBanner: {
-      title: "You're on the Free Plan",
-      subtitle: "Upgrade to unlock more campaigns, analytics & widget customization.",
-      cta: "View Plans →",
+      title: "Free Plan — limited to 1 active campaign",
+      subtitle: "Upgrade for up to unlimited campaigns, advanced analytics & priority support.",
+      cta: "Start 7-day free trial →",
     },
     basicPlanBanner: {
       text: "Upgrade to Advanced for unlimited campaigns & priority support",

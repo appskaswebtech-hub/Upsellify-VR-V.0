@@ -18,7 +18,8 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
-/extensions/*/dist
+# Shopify extensions kept out of this repo
+/extensions/
 
 # Ignore shopify files created during app dev
 .shopify/*

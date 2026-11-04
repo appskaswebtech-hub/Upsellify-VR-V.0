@@ -167,7 +167,6 @@ export default function CustomizeHub() {
     ? SECTIONS
     : SECTIONS.filter((s) => s.sectionKey === filter);
 
-
   return (
     <Page title={t.customize.pageTitle}>
       <TitleBar title={t.customize.pageTitle} />
@@ -182,7 +181,7 @@ export default function CustomizeHub() {
             <Button url="/app/widget-settings">{t.customize.commonSettings.editCta}</Button>
           </InlineStack>
         </Card>
-
+        
         <BlockStack gap="500">
           <InlineStack align="space-between" blockAlign="center">
             <Text as="h2" variant="headingMd">{t.customize.widgetsHeading}</Text>
@@ -228,7 +227,6 @@ export default function CustomizeHub() {
             </BlockStack>
           )}
         </BlockStack>
-
       </BlockStack>
     </Page>
   );
